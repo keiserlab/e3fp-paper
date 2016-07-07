@@ -9,7 +9,8 @@ from fpcore.fconvert import string2ascii, ascii2string
 
 from e3fp.config.params import read_params
 from e3fp.fingerprint.fprint import Fingerprint
-from e3fp.pipeline import fprints_from_smiles, fprints_from_sdf
+from e3fp.pipeline import fprints_from_smiles, fprints_from_sdf, \
+                          fprints_from_mol
 
 CONFIG_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)),
                           "config")
@@ -35,6 +36,17 @@ def native_tuple_to_fprint(native_tuple):
     fprint = Fingerprint.from_bitstring(bitstring)
     fprint.name = name
     return fprint
+
+
+def native_tuples_from_mol(mol, fprint_params={}, save=False):
+    if not mol.HasProp("_Name"):
+        raise ValueError(
+            "mol must have a '_Name' property or `name` must be provided")
+
+    fprints_list = fprints_from_mol(mol, fprint_params=fprint_params,
+                                    save=save)
+    native_tuples = list(map(fprint_to_native_tuple, fprints_list))
+    return native_tuples
 
 
 def native_tuples_from_smiles(smiles, name, confgen_params={},
