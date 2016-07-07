@@ -3,10 +3,22 @@
 Author: Seth Axen
 E-mail: seth.axen@gmail.com
 """
+import os
+
 from fpcore.fconvert import string2ascii, ascii2string
 
+from e3fp.config.params import read_params
 from e3fp.fingerprint.fprint import Fingerprint
 from e3fp.pipeline import fprints_from_smiles, fprints_from_sdf
+
+CONFIG_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                          "config")
+PARAM_FILE = os.path.join(CONFIG_DIR, "best_params.cfg")
+
+
+def load_params():
+    """Load best parameter set from file."""
+    return read_params(PARAM_FILE)
 
 
 def fprint_to_native_tuple(fprint):
