@@ -15,12 +15,15 @@ from e3fp.pipeline import fprints_from_smiles, fprints_from_sdf, \
 CONFIG_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)),
                           "config")
 PARAM_FILE = os.path.join(CONFIG_DIR, "best_params.cfg")
-
+FIT_FILE = os.path.join(CONFIG_DIR, "best_params.fit")
 
 def load_params():
     """Load best parameter set from file."""
     return read_params(PARAM_FILE)
 
+def get_fit_file():
+    """Get path to SEA library fit file for best parameter set."""
+    return FIT_FILE
 
 def fprint_to_native_tuple(fprint):
     """Convert fingerprint to tuple with native string, name."""
