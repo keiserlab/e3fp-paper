@@ -57,6 +57,13 @@ def fptype_to_fprint_params(fp_type):
     return fp_params
 
 
+def get_ecfp4_fptype():
+    """Make SEA ``FingerprintType`` for 1024-bit ECFP4 fingerprints."""
+    fp_type = FingerprintType()
+    fp_type.generate("rdkit_ecfp")
+    return fp_type
+
+
 def targets_to_mol_lists_targets(targets_dict, mol_lists_dict):
     """Convert targets with only mol names to targets with mol lists."""
     mol_lists_targets_dict = {}
