@@ -47,6 +47,7 @@ class SEASetSearcher(object):
             self.target_results_dict = shelve.open(target_db, writeback=True)
         else:
             self.target_results_dict = {}
+        self.target_id_key_map = {}
         self.open(reference)
 
     def open(self, reference):
@@ -99,7 +100,7 @@ class SEASetSearcher(object):
                 exc_info=True)
             return {}
 
-        logging.debug("SEA Search Results: \n"+repr(results.results))
+        logging.debug("SEA Search Results: \n" + repr(results.results))
         # self.set_results_dict[mol_name] = {
         #     target_id: (evalue, max_tc)
         #     for _, target_id, hit_affinity, evalue, max_tc
@@ -111,6 +112,7 @@ class SEASetSearcher(object):
                 mol_name, {})[target_key] = (evalue, max_tc)
             self.target_results_dict.setdefault(target_key,
                                                 set([])).add(mol_name)
+            self.target_id_key_map.setdefault(target_id, set()).add(target_key)
 
         try:
             self.set_results_dict.sync()
@@ -146,11 +148,11 @@ class SEASetSearcher(object):
         i = 0
         for result in search_iter:
             if (i + 1) % 100 == 0:
-                print("Searched {:d} molecules.".format(i+1))
+                print("Searched {:d} molecules.".format(i + 1))
             i += 1
         if self.log:
             logging.info(
-                "Searched {:d} molecule sets against library.".format(i+1))
+                "Searched {:d} molecule sets against library.".format(i + 1))
         return True
 
     def mol_result(self, mol_name):
@@ -169,8 +171,8 @@ class SEASetSearcher(object):
         """
         return self.set_results_dict.get(mol_name, {})
 
-    def target_result(self, target_id):
-        """Get results for target at all affinity levels.
+    def target_result(self, target_id, affinity=None):
+        """Get results for target at any affinity levels.
 
         To retrieve stats for molecule/target pairs, follow with
         'mol_target_result'.
@@ -179,16 +181,22 @@ class SEASetSearcher(object):
         ----------
         target_id : str
             Target id.
+        affinity : int or iterable
+            One or more specific affinity levels at which to retrieve results.
+            If not provided, all are returned.
 
         Returns
         -------
         target_results : set
             Set of molecule names which hit to target.
         """
-        return self.target_results_dict.get(target_id, set([]))
+        target_keys = self._get_target_keys(target_id, affinity=affinity)
 
-    def mol_target_result(self, mol_name, target_id):
-        """Get results for mol/target pair at all affinities.
+        return set.union(*[self.target_results_dict.get(target_key, set())
+                           for target_key in target_keys])
+
+    def mol_target_result(self, mol_name, target_id, affinity=None):
+        """Get results for mol/target pair at any/all affinities.
 
         Parameters
         ----------
@@ -199,11 +207,42 @@ class SEASetSearcher(object):
 
         Returns
         -------
-        mol_target_results : tuple or None
-            Tuple of e-value and max tanimoto coefficient if a significant hit
-            was found between mol and target. Otherwise, None is returned.
+        mol_target_results : dict or None
+            Dict matching target keys at provided affinities to the tuple of
+            e-value and max tanimoto coefficient if a significant hit
+            was found between mol and target at that affinity. Otherwise,
+            None is returned.
         """
-        return self.set_results_dict.get(mol_name, {}).get(target_id, None)
+        target_keys = self._get_target_keys(target_id, affinity=affinity)
+        mol_results = self.set_results_dict.get(mol_name, {})
+        results = {x: mol_results[x] for x in target_keys if x in mol_results}
+        if len(results) == 0:
+            return None
+        else:
+            return results
+
+    def _get_target_keys(self, target_id, affinity=None):
+        """Get target keys corresponding to id at specific affinities.
+
+        Parameters
+        ----------
+        target_id : str
+            Target id
+        affinity : iterable or int or None, optional
+            An affinity or iterable of affinity levels. If None, all affinity
+            levels are considered.
+        """
+        target_keys = set()
+        if affinity is None:
+            target_keys.update(self.target_id_key_map.get(target_id, set()))
+        elif isinstance(affinity, (int, long, str)):  # single affinity
+            return {TargetKey(target_id, str(affinity))}
+        else:  # iterable of affinities
+            affinity = set(affinity)
+            target_keys.update([
+                x for x in self.target_id_key_map.get(target_id, set())
+                if int(x.group) in affinity])
+        return target_keys
 
     def close(self):
         """Close library file."""
@@ -217,6 +256,7 @@ class SEASetSearcher(object):
             logging.info("Clearing results from searcher.")
         self.set_results_dict.clear()
         self.target_results_dict.clear()
+        self.target_id_key_map.clear()
 
     def __del__(self):
         self.close()
