@@ -14,13 +14,13 @@ from sklearn.metrics import auc as sk_auc
 
 from seacore.util.library import SetValue
 from python_utilities.io_tools import touch_dir
-from e3fp.sea_utils.util import molecules_to_lists_dicts, \
-                                lists_dicts_to_molecules, \
-                                targets_to_dict, dict_to_targets, \
-                                targets_to_mol_lists_targets, \
-                                mol_lists_targets_to_targets, \
-                                filter_molecules_by_targets, \
-                                filter_targets_by_molecules
+from e3fp_paper.sea_utils.util import molecules_to_lists_dicts, \
+                                      lists_dicts_to_molecules, \
+                                      targets_to_dict, dict_to_targets, \
+                                      targets_to_mol_lists_targets, \
+                                      mol_lists_targets_to_targets, \
+                                      filter_molecules_by_targets, \
+                                      filter_targets_by_molecules
 
 csv.field_size_limit(sys.maxsize)
 

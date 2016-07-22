@@ -6,8 +6,8 @@ E-mail: seth.axen@gmail.com
 import os
 import logging
 
-from e3fp.sea_utils.library import build_library
-from e3fp.sea_utils.run import sea_set_search
+from e3fp_paper.sea_utils.library import build_library
+from e3fp_paper.sea_utils.run import sea_set_search
 
 
 class CVMethod(object):
@@ -26,8 +26,7 @@ class CVMethod(object):
         """
         self.out_dir = out_dir
         self.overwrite = overwrite
-        self.default_metric = tuple(0.)  # Default value if pair missing from
-                                         # results
+        self.default_metric = (0.)  # Default value if pair missing from results
         self.order = "greater"  # A greater value of the above metric is
                                 # better
 
@@ -76,14 +75,14 @@ class CVMethod(object):
 class SEASearchCVMethod(CVMethod):
 
     def __init__(self, out_dir="", overwrite=False):
-        super(CVMethod, self).__init__(out_dir=out_dir)
+        super(SEASearchCVMethod, self).__init__(out_dir=out_dir)
         self.library_file = os.path.join(self.out_dir, "library.fit")
         self.fit_file = os.path.join(self.out_dir, "library.sea")
         self.default_metric = (1.0, 0.0)  # (p-value, tc)
         self.order = "less"  # A smaller value of the above metric is better
 
     def train(self, molecules_file, targets_file, generate_fit=True):
-        super(CVMethod, self).train(molecules_file, targets_file)
+        super(SEASearchCVMethod, self).train(molecules_file, targets_file)
         if os.path.isfile(self.fit_file) and not self.overwrite:
             logging.warning("Fit file already exists. Will not generate fit.")
             generate_fit = False

@@ -17,11 +17,11 @@ except ImportError:
 
 from python_utilities.scripting import setup_logging
 from python_utilities.io_tools import touch_dir, smart_open
-from e3fp.sea_utils.util import molecules_to_lists_dicts, \
-                                mol_lists_targets_to_targets, \
-                                targets_to_dict
-from e3fp.crossvalidation.util import files_to_cv_files, get_auc
-from e3fp.crossvalidation.methods import SEASearchCVMethod
+from e3fp_paper.sea_utils.util import molecules_to_lists_dicts, \
+                                      mol_lists_targets_to_targets, \
+                                      targets_to_dict
+from e3fp_paper.crossvalidation.util import files_to_cv_files, get_auc
+from e3fp_paper.crossvalidation.methods import SEASearchCVMethod
 
 setup_logging(reset=False)
 
@@ -105,6 +105,7 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
             test_targets_file,
             test_molecules_file) in enumerate(cv_files_iter):
         msg = " ({:d} / {:d})".format(i + 1, k)
+        cv_dir = os.path.dirname(train_targets_file)
         cv_auc_file = os.path.join(cv_dir, auc_file)
         cv_roc_file = os.path.join(cv_dir, roc_file)
         results_file = os.path.join(cv_dir, "results.pkl.gz")
@@ -198,7 +199,7 @@ def run_cv(molecules_file, test_targets_file, test_molecules_file,
 
 def cv_files_to_roc_auc(molecules_file, test_targets_file,
                         test_molecules_file, train_targets_file,
-                        train_molecules_file, affinity=10000, cv_method,
+                        train_molecules_file, cv_method, affinity=10000,
                         cv_type="targets"):
     """Get ROCs dict (false/true positives) and AUCs dict.
 
