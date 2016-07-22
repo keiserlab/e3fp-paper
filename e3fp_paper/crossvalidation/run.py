@@ -1,4 +1,4 @@
-"""Run cross-validation using SEA.
+"""Run k-fold cross-validation using a provided method.
 
 Author: Seth Axen
 E-mail: seth.axen@gmail.com
@@ -17,22 +17,21 @@ except ImportError:
 
 from python_utilities.scripting import setup_logging
 from python_utilities.io_tools import touch_dir, smart_open
-from e3fp.sea_utils.library import build_library
 from e3fp.sea_utils.util import molecules_to_lists_dicts, \
                                 mol_lists_targets_to_targets, \
                                 targets_to_dict
-from e3fp.sea_utils.run import sea_set_search
 from e3fp.crossvalidation.util import files_to_cv_files, get_auc
-
+from e3fp.crossvalidation.methods import SEASearchCVMethod
 
 setup_logging(reset=False)
 
 
 def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
                  affinity=10000, split_by="targets", cv_type="targets",
-                 targets_name="targets", library_name="library",
+                 targets_name="targets",
                  out_dir=os.getcwd(), overwrite=False, auc_file="aucs.pkl.gz",
-                 roc_file="rocs.pkl.gz", parallelizer=None):
+                 roc_file="rocs.pkl.gz", cv_method_class=SEASearchCVMethod,
+                 parallelizer=None):
     """Run k-fold cross-validation on input files.
 
     Parameters
@@ -62,8 +61,6 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
         ROC curves and AUCs are calculated for each molecule.
     targets_name : str, optional
         Targets filename prefix.
-    library_name : str, optional
-        Library filename prefix
     out_dir : Attribute, optional
         Directory to which to write output files.
     overwrite : bool, optional
@@ -72,6 +69,9 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
         Filename to which to write AUCs dict.
     roc_file : str, optional
         Filename to which to write ROCs dict.
+    cv_method_class : CVMethod, optional
+        Method to use for building a training model and comparing a test set
+        of molecules against a training set.
     parallelizer : Parallelizer or None, optional
         Parallelizer for running the k CVs in parallel.
 
@@ -79,6 +79,11 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
     -------
     mean_auc : float
         Average AUC over all k CV runs.
+
+    Raises
+    ------
+    ValueError
+        Description
     """
     if cv_type == "molecules" and split_by != "molecules":
         raise ValueError("If `cv_type` is 'molecules', `split_by` must also ",
@@ -86,17 +91,8 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
 
     touch_dir(out_dir)
 
-    library_file = os.path.join(out_dir, "{!s}.sea".format(library_name))
-    fit_file = os.path.join(out_dir, "{!s}.fit".format(library_name))
-    if overwrite or not (os.path.isfile(library_file) and
-                         os.path.isfile(fit_file)):
-        logging.info("Generating background fit.")
-        generate_fit = True
-        if os.path.isfile(fit_file):
-            logging.warning("Fit file already exists. Will not generate fit.")
-            generate_fit = False
-        build_library(library_file, molecules_file, targets_file, fit_file,
-                      generate_fit=generate_fit)
+    cv_method = cv_method_class(out_dir=out_dir, overwrite=overwrite)
+    cv_method.train(molecules_file, targets_file)
 
     logging.info("Writing cross-validation files.")
     cv_files_iter = files_to_cv_files(targets_file, molecules_file, k=k,
@@ -110,17 +106,14 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
             test_targets_file,
             test_molecules_file) in enumerate(cv_files_iter):
         msg = " ({:d} / {:d})".format(i + 1, k)
-        cv_dir = os.path.dirname(train_targets_file)
-        train_library_file = os.path.join(cv_dir, "train_{!s}.sea".format(
-            library_name))
         cv_auc_file = os.path.join(cv_dir, auc_file)
         cv_roc_file = os.path.join(cv_dir, roc_file)
         results_file = os.path.join(cv_dir, "results.pkl.gz")
         args_list.append((molecules_file, test_targets_file,
                           test_molecules_file, train_targets_file,
-                          train_molecules_file, train_library_file,
-                          cv_auc_file, cv_roc_file, results_file, fit_file,
-                          cv_type, msg, overwrite))
+                          train_molecules_file,
+                          cv_auc_file, cv_roc_file, results_file,
+                          cv_method, cv_type, msg, overwrite))
 
     if parallelizer is not None:
         mean_aucs = np.asarray(
@@ -134,8 +127,8 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
 
 
 def run_cv(molecules_file, test_targets_file, test_molecules_file,
-           train_targets_file, train_molecules_file, train_library_file,
-           auc_file, roc_file, results_file, fit_file, cv_type="targets",
+           train_targets_file, train_molecules_file,
+           auc_file, roc_file, results_file, cv_method, cv_type="targets",
            msg="", overwrite=False):
     """Run a single cross-validation on input training/test files.
 
@@ -151,33 +144,27 @@ def run_cv(molecules_file, test_targets_file, test_molecules_file,
         Targets and corresponding molecules in training set
     train_molecules_file : str
         Training molecules (usually not disjoint from test molecules)
-    train_library_file : str
-        SEA library for training data.
     auc_file : str
         File to which to write AUCs.
     roc_file : str
         File to which to write ROCs.
     results_file : str
         File to which to write results.
-    fit_file : str
-        SEA fit file.
+    cv_method : CVMethod
+        Method to use for comparison of test molecules against training
+        molecules.
+    cv_type : str, optional
+        Type of cross-validation to run. Options are 'targets' or 'molecules'.
     msg : str, optional
         Message to append to log messages.
     overwrite : bool, optional
         Overwrite files.
-    cv_type : str, optional
-        Type of cross-validation to run. Options are 'targets' or 'molecules'.
 
     Returns
     -------
     mean_auc : float
         Average AUC over targets or molecules (depending on `type`).
     """
-    if overwrite or not os.path.isfile(train_library_file):
-        logging.info("Building library for training set.{}".format(msg))
-        build_library(train_library_file, train_molecules_file,
-                      train_targets_file, fit_file, generate_fit=False)
-
     if (os.path.isfile(auc_file) and os.path.isfile(roc_file) and
             not overwrite):
         logging.info("Loading CV results from files.{}".format(msg))
@@ -187,10 +174,11 @@ def run_cv(molecules_file, test_targets_file, test_molecules_file,
             fp_tp_rates_dict = pickle.load(f)
     else:
         logging.info(
-            "Searching test sequences against library.{}".format(msg))
+            "Searching test against training.{}".format(msg))
         fp_tp_rates_dict, aucs_dict, results_dict = cv_files_to_roc_auc(
             molecules_file, test_targets_file, test_molecules_file,
-            train_targets_file, train_library_file, cv_type=cv_type)
+            train_targets_file, train_molecules_file, cv_method,
+            cv_type=cv_type)
 
         if overwrite or not os.path.isfile(auc_file):
             with smart_open(auc_file, "wb") as f:
@@ -211,8 +199,8 @@ def run_cv(molecules_file, test_targets_file, test_molecules_file,
 
 def cv_files_to_roc_auc(molecules_file, test_targets_file,
                         test_molecules_file, train_targets_file,
-                        train_library_file, affinity=10000,
-                        cv_type="targets"):
+                        train_molecules_file, affinity=10000,
+                        cv_method, cv_type="targets"):
     """Get ROCs dict (false/true positives) and AUCs dict.
 
     Parameters
@@ -225,8 +213,8 @@ def cv_files_to_roc_auc(molecules_file, test_targets_file,
         Test molecules (usually not disjoint from training molecules)
     train_targets_file : str
         Targets and corresponding molecules in training set
-    train_library_file : str
-        SEA library for training data.
+    train_molecules_file : str
+        Training molecules.
     affinity : int, optional
         Affinity level of binders to consider.
     cv_type : str, optional
@@ -257,10 +245,9 @@ def cv_files_to_roc_auc(molecules_file, test_targets_file,
     _, test_mol_lists_dict, _ = molecules_to_lists_dicts(test_molecules_file)
     del _
 
-    logging.info("Searching {:d} fingerprints against {}.".format(
-        len(test_mol_lists_dict), train_library_file))
-    results = sea_set_search(train_library_file, test_mol_lists_dict,
-                             log=True)
+    results = cv_method.compare(test_mol_lists_dict, train_molecules_file,
+                                train_targets_file,
+                                cv_dir=os.path.dirname(train_targets_file))
 
     train_targets_dict = mol_lists_targets_to_targets(
         targets_to_dict(train_targets_file))
@@ -282,14 +269,15 @@ def cv_files_to_roc_auc(molecules_file, test_targets_file,
             true_false = np.array([x in test_true_mols for x in tested_mols],
                                   dtype=np.int)
 
-            # E-values/Max tanimoto for target/mol pair in test set.
-            evalues, max_tc = (
-                np.array(y, dtype=np.double) for y in zip(
-                    *[results.mol_result(x).get(target_key, (1., 0.))
-                      for x in tested_mols]))
+            # Metrics for target/mol pair in test set.
+            metrics = np.array(
+                [results.get(x, {}).get(target_key, cv_method.default_metric)
+                 for x in tested_mols], dtype=np.double).T
 
-            fp_tp_rates, thresholds, auc = evalues_to_roc_auc(
-                evalues, true_false, name=target_key.tid)
+            fp_tp_rates, thresholds, auc = metrics_to_roc_auc(
+                metrics[0], true_false, name=target_key.tid,
+                order=cv_method.order)
+
             fp_tp_rates_dict[target_key] = fp_tp_rates
             aucs_dict[target_key] = auc
     else:
@@ -309,38 +297,41 @@ def cv_files_to_roc_auc(molecules_file, test_targets_file,
             true_false = np.array([x in test_true_targets for x
                                    in tested_targets], dtype=np.int)
 
-            # E-values/Max tanimoto for target/mol pair in test set.
-            evalues, max_tc = (
-                np.array(y, dtype=np.double) for y in zip(
-                    *[results.mol_result(mol_name).get(target_key, (1., 0.))
-                      for target_key in tested_targets]))
+            # Metrics for target/mol pair in test set.
+            metrics = np.array(
+                [results.get(mol_name, {}).get(target_key,
+                                               cv_method.default_metric)
+                 for target_key in tested_targets], dtype=np.double).T
 
-            fp_tp_rates, thresholds, auc = evalues_to_roc_auc(
-                evalues, true_false, name=mol_name)
+            fp_tp_rates, thresholds, auc = metrics_to_roc_auc(
+                metrics[0], true_false, name=mol_name, order=cv_method.order)
             fp_tp_rates_dict[mol_name] = fp_tp_rates
             aucs_dict[mol_name] = auc
 
-    return fp_tp_rates_dict, aucs_dict, results.set_results_dict
+    return fp_tp_rates_dict, aucs_dict, results
 
 
-def evalues_to_roc_auc(evalues, true_false, name=None):
-    """Calculate ROC curve and AUC from evalues and true/false positives.
+def metrics_to_roc_auc(metrics, true_false, name=None, order="greater"):
+    """Calculate ROC curve and AUC from metrics and true/false positives.
 
     Parameters
     ----------
-    evalues : ndarray of double
-        Array of e-values corresponding to positive hits.
+    metrics : ndarray of double
+        Array of metrics corresponding to positive hits.
     true_false : ndarray of int
         Array of 1s and 0s for what should be true hits and false hits,
         respectively.
     name : str or None, optional
         Name of query (molecule name or target id), used for logging.
+    order : str, optional
+        How results are ordered by metric. If "greater," a greater value of
+        the metric is a better hit; if "less", the opposite.
 
     Returns
     -------
     fp_tp_rates : 2xN array of double
         Array of false positive and true positive rates at all `N` unique
-        e-values. Forms ROC curve.
+        metrics. Forms ROC curve.
     thresholds : Nx1 array of double
         Array of -log10E thresholds corresponding to `fp_tp_rates`.
     roc_auc : float
@@ -362,19 +353,10 @@ def evalues_to_roc_auc(evalues, true_false, name=None):
                              "unlikely.").format(name))
         return None, None, None
 
-    # If e-values are too low, they round to 0. Because -log10(evalue) will
-    # be used for the threshold, these are set to a value higher than higher
-    # than the highest -log10(evalue).
-    inf_ind = np.where(evalues == 0)
-    log10e = -np.log10(evalues)
-    real_ind = np.where(evalues != 0)
-    if real_ind[0].shape[0] == 0:
-        real_max = 1.
-    else:
-        real_max = np.amax(log10e[real_ind])
-    log10e[inf_ind] = real_max + 1.
+    if order == "less":
+        metrics = -metrics
 
-    fpr, tpr, thresholds = roc_curve(true_false, log10e)
+    fpr, tpr, thresholds = roc_curve(true_false, metrics)
     roc_auc = get_auc(fpr, tpr)
     fp_tp_rates = np.array([fpr, tpr], dtype=np.double)
 
