@@ -20,7 +20,7 @@ class CVMethod(object):
         Parameters
         ----------
         out_dir : str, optional
-            Directory in which to save any output files.
+            Directory in which to save any output files during initialization.
         overwrite : bool, optional
             Overwrite any output files if they already exist.
         """

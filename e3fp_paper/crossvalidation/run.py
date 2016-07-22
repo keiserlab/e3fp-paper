@@ -28,10 +28,9 @@ setup_logging(reset=False)
 
 def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
                  affinity=10000, split_by="targets", cv_type="targets",
-                 targets_name="targets",
-                 out_dir=os.getcwd(), overwrite=False, auc_file="aucs.pkl.gz",
-                 roc_file="rocs.pkl.gz", cv_method_class=SEASearchCVMethod,
-                 parallelizer=None):
+                 targets_name="targets", out_dir=os.getcwd(), overwrite=False,
+                 auc_file="aucs.pkl.gz", roc_file="rocs.pkl.gz",
+                 cv_method_class=SEASearchCVMethod, parallelizer=None):
     """Run k-fold cross-validation on input files.
 
     Parameters
@@ -51,8 +50,8 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
         How to split the data into `k` sets. Options are 'targets' or
         'molecules'. In the former case, each target's set of molecules as
         well as the set of targetless molecules, are split into `k` sets. In
-        the latter case, all molecules are split into `k` sets. Must be set
-        to 'molecules' if `cv_type` is 'molecules'.
+        the latter case, all molecules are split into `k` sets. Must be set to
+        'molecules' if `cv_type` is 'molecules'.
     cv_type : str, optional
         Type of cross-validation to run. Options are 'targets' or 'molecules'.
         In 'targets', ROC curves and AUCs are calculated for each target by
@@ -69,7 +68,7 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
         Filename to which to write AUCs dict.
     roc_file : str, optional
         Filename to which to write ROCs dict.
-    cv_method_class : CVMethod, optional
+    cv_method_class : type of CVMethod, optional
         Method to use for building a training model and comparing a test set
         of molecules against a training set.
     parallelizer : Parallelizer or None, optional
@@ -127,9 +126,9 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
 
 
 def run_cv(molecules_file, test_targets_file, test_molecules_file,
-           train_targets_file, train_molecules_file,
-           auc_file, roc_file, results_file, cv_method, cv_type="targets",
-           msg="", overwrite=False):
+           train_targets_file, train_molecules_file, auc_file, roc_file,
+           results_file, cv_method, cv_type="targets", msg="",
+           overwrite=False):
     """Run a single cross-validation on input training/test files.
 
     Parameters
@@ -199,8 +198,8 @@ def run_cv(molecules_file, test_targets_file, test_molecules_file,
 
 def cv_files_to_roc_auc(molecules_file, test_targets_file,
                         test_molecules_file, train_targets_file,
-                        train_molecules_file, affinity=10000,
-                        cv_method, cv_type="targets"):
+                        train_molecules_file, affinity=10000, cv_method,
+                        cv_type="targets"):
     """Get ROCs dict (false/true positives) and AUCs dict.
 
     Parameters
@@ -337,8 +336,8 @@ def metrics_to_roc_auc(metrics, true_false, name=None, order="greater"):
     roc_auc : float
         AUC of ROC curve formed by `fp_tp_rates`
     """
-    if true_false.shape[0] == 0:
-        return None, None, None  # No hits! ROC/AUC is meaningless.
+    if true_false.shape[0] == 0:  # No hits! ROC/AUC is meaningless.
+        return None, None, None
 
     true_num = np.sum(true_false)
     false_num = true_false.shape[0] - true_num
