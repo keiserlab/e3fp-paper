@@ -5,6 +5,9 @@ E-mail: seth.axen@gmail.com
 """
 import os
 import logging
+import sys
+
+import math
 
 from e3fp_paper.sea_utils.library import build_library
 from e3fp_paper.sea_utils.run import sea_set_search
@@ -78,8 +81,8 @@ class SEASearchCVMethod(CVMethod):
         super(SEASearchCVMethod, self).__init__(out_dir=out_dir)
         self.library_file = os.path.join(self.out_dir, "library.fit")
         self.fit_file = os.path.join(self.out_dir, "library.sea")
-        self.default_metric = (1.0, 0.0)  # (p-value, tc)
-        self.order = "less"  # A smaller value of the above metric is better
+        self.default_metric = (0.0, 0.0)  # (p-value, tc)
+        self.order = "greater"  # A greater value of the above metric is better
 
     def train(self, molecules_file, targets_file, generate_fit=True):
         super(SEASearchCVMethod, self).train(molecules_file, targets_file)
@@ -108,8 +111,24 @@ class SEASearchCVMethod(CVMethod):
         results = sea_set_search(train_library_file, test_mol_lists_dict,
                                  log=True)
 
-        return results.set_results_dict
+        results = results.set_results_dict
+        # Convert p-values to -log10(p-value)
+        for mol_name in results:
+            for target_key, metric in results[mol_name]:
+                results[mol_name][target_key] = (pvalue_to_log10e(metric[0]),
+                                                 metric[1])
+
+        return results
 
     def is_trained(self):
         return (os.path.isfile(self.fit_file) and
                 os.path.isfile(self.library_file))
+
+    @staticmethod
+    def pvalue_to_log10e(pvalue):
+          # If e-values are too low, they round to 0. Because -log10(evalue) will
+        # be used for the threshold, these are set to a value higher than higher
+        # than the highest -log10(evalue).
+        if pvalue == 0:
+            return -sys.float_info.min_10_exp + 1.  # Return greater than max.
+        return -math.log10(pvalue)
