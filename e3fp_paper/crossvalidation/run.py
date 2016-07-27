@@ -6,14 +6,9 @@ E-mail: seth.axen@gmail.com
 import os
 import logging
 import cPickle as pickle
-import warnings
 
 import numpy as np
 from sklearn.metrics import roc_curve
-try:
-    from sklearn.exceptions import UndefinedMetricWarning
-except ImportError:
-    from sklearn.metrics.base import UndefinedMetricWarning
 
 from python_utilities.scripting import setup_logging
 from python_utilities.io_tools import touch_dir, smart_open
