@@ -125,7 +125,7 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
 
     if combined_roc_file and (overwrite or not os.path.isfile(roc_file)):
         logging.info("Computing combined ROC curve.")
-        fns = os.path.join(out_dir, "*", metrics_labels_file)
+        fns = glob.glob(os.path.join(out_dir, "*", metrics_labels_file))
         if len(fns) == 0:
             logging.warning(
                 "Combined ROC curve cannot be calculated because data files do not exist.")
@@ -133,20 +133,18 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
             metrics_arrays = []
             labels_arrays = []
             for fn in fns:
-                with open(fn, "rb") as f:
+                with smart_open(fn, "rb") as f:
                     metrics_labels = pickle.load(f)
                     metrics, labels = zip(*metrics_labels.values())
-                    metrics_arrays.append(metrics)
-                    labels_arrays.append(labels)
+                    metrics_arrays.extend(metrics)
+                    labels_arrays.extend(labels)
             metrics = np.hstack(metrics_arrays)
             labels = np.hstack(labels_arrays)
-            fp_tp_rates, thresholds, roc_auc = metrics_to_roc_auc(
+            comb_fp_tp, _, comb_roc_auc = metrics_to_roc_auc(
                 metrics[0], labels, order=cv_method.order)
-            comb_roc_auc = np.mean([x for x in roc_auc.values()
-                                    if x is not None])
             logging.info("Combined ROC AUC: {:.4f}.".format(comb_roc_auc))
             with smart_open(roc_file, "wb") as f:
-                pickle.dump(fp_tp_rates, f)
+                pickle.dump(comb_fp_tp, f)
             logging.info("Wrote combined ROC file to {}".format(roc_file))
 
     cv_mean_auc = np.mean(mean_aucs)
