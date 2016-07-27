@@ -30,8 +30,7 @@ class CVMethod(object):
         self.out_dir = out_dir
         self.overwrite = overwrite
         self.default_metric = (0.)  # Default value if pair missing from results
-        self.order = "greater"  # A greater value of the above metric is
-                                # better
+        self.order = "greater"  # A greater value of the above metric is better
 
     def train(self, molecules_file, targets_file):
         """Train the model.
@@ -48,7 +47,7 @@ class CVMethod(object):
 
     def compare(self, test_mol_lists_dict, train_molecules_file,
                 train_targets_file, cv_dir=""):
-        """Summary
+        """Compare test molecules against training targets using model.
 
         Parameters
         ----------
@@ -81,10 +80,20 @@ class SEASearchCVMethod(CVMethod):
         super(SEASearchCVMethod, self).__init__(out_dir=out_dir)
         self.library_file = os.path.join(self.out_dir, "library.sea")
         self.fit_file = os.path.join(self.out_dir, "library.fit")
-        self.default_metric = (0.0, 0.0)  # (p-value, tc)
-        self.order = "greater"  # A greater value of the above metric is better
+        self.default_metric = (0.0, 0.0)  # (-log(p-value), tc)
 
     def train(self, molecules_file, targets_file, generate_fit=True):
+        """Determine significance threshold and build SEA library.
+
+        Parameters
+        ----------
+        molecules_file : str
+            SEA format molecules file.
+        targets_file : str
+            SEA format targets file.
+        generate_fit : bool, optional
+            Generate fit against background Tanimoto distribution.
+        """
         super(SEASearchCVMethod, self).train(molecules_file, targets_file)
         if os.path.isfile(self.fit_file) and not self.overwrite:
             logging.warning("Fit file already exists. Will not generate fit.")
@@ -96,6 +105,28 @@ class SEASearchCVMethod(CVMethod):
 
     def compare(self, test_mol_lists_dict, train_molecules_file,
                 train_targets_file, cv_dir=None):
+        """Compare test molecules against training targets using SEA.
+
+        Parameters
+        ----------
+        test_mol_lists_dict : str
+            Mol lists dict for test molecules.
+        train_molecules_file : str
+            SEA format molecules file for training molecules.
+        train_targets_file : str
+            SEA format targets file for training molecules.
+        cv_dir : str, optional
+            Directory in which to save any output files.
+
+        Returns
+        -------
+        dict
+            Results of comparison, in format
+            {mol_name: {target_key: (-log10(p), tc), ...}, ...}, where
+            where -log10(p), where p is the p-value of the molecule-target
+            pair, and tc is the max Tanimoto coefficient between a test
+            fingerprint and a fingerprint in the training set for that target.
+        """
         if cv_dir is None:
             cv_dir = self.out_dir
         train_library_file = os.path.join(cv_dir, "library.sea")
@@ -115,20 +146,22 @@ class SEASearchCVMethod(CVMethod):
         # Convert p-values to -log10(p-value)
         for mol_name in results:
             for target_key, metric in results[mol_name].iteritems():
-                results[mol_name][target_key] = (self.pvalue_to_log10e(metric[0]),
-                                                 metric[1])
+                results[mol_name][target_key] = (
+                    self.pvalue_to_neglog10e(metric[0]), metric[1])
 
         return results
 
     def is_trained(self):
+        """Library has bin built."""
         return (os.path.isfile(self.fit_file) and
                 os.path.isfile(self.library_file))
 
     @staticmethod
-    def pvalue_to_log10e(pvalue):
-          # If e-values are too low, they round to 0. Because -log10(evalue) will
-        # be used for the threshold, these are set to a value higher than higher
-        # than the highest -log10(evalue).
+    def pvalue_to_neglog10e(pvalue):
+        """Get -log10(p-value); set to system max if p-value rounds to 0."""
+        # If e-values are too low, they round to 0. Because -log10(evalue)
+        # will be used for the threshold, these are set to a value higher than
+        # higher than the highest -log10(evalue).
         if pvalue == 0.:
             return -sys.float_info.min_10_exp + 1.  # Return greater than max.
         return -math.log10(pvalue)
