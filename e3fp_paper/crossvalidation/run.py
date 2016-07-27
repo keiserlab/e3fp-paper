@@ -119,8 +119,10 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
     else:
         mean_aucs = np.asarray([run_cv(*x) for x in args_list],
                                dtype=np.double)
+    cv_mean_auc = np.mean(mean_aucs)
+    logging.info("CV Mean AUC: {:.4f}.".format(cv_mean_auc))
 
-    return np.mean(mean_aucs)
+    return cv_mean_auc
 
 
 def run_cv(molecules_file, test_targets_file, test_molecules_file,
