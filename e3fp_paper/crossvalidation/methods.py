@@ -79,8 +79,8 @@ class SEASearchCVMethod(CVMethod):
 
     def __init__(self, out_dir="", overwrite=False):
         super(SEASearchCVMethod, self).__init__(out_dir=out_dir)
-        self.library_file = os.path.join(self.out_dir, "library.fit")
-        self.fit_file = os.path.join(self.out_dir, "library.sea")
+        self.library_file = os.path.join(self.out_dir, "library.sea")
+        self.fit_file = os.path.join(self.out_dir, "library.fit")
         self.default_metric = (0.0, 0.0)  # (p-value, tc)
         self.order = "greater"  # A greater value of the above metric is better
 
