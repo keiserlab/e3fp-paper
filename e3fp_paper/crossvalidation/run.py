@@ -27,7 +27,7 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
                  targets_name="targets", out_dir=os.getcwd(), overwrite=False,
                  auc_file="aucs.pkl.gz", roc_file="rocs.pkl.gz",
                  metrics_labels_file="metrics_labels.pkl.gz",
-                 combined_roc_file=False, cv_method_class=SEASearchCVMethod,
+                 combined_roc_file=True, cv_method_class=SEASearchCVMethod,
                  parallelizer=None):
     """Run k-fold cross-validation on input files.
 
