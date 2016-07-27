@@ -86,7 +86,9 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
     touch_dir(out_dir)
 
     cv_method = cv_method_class(out_dir=out_dir, overwrite=overwrite)
-    cv_method.train(molecules_file, targets_file)
+    if cv_method is SEASearchCVMethod:  # SEA's fitting can be done before splitting
+        logging.info("Training model. {}".format(msg))
+        cv_method.train(molecules_file, targets_file)
 
     logging.info("Writing cross-validation files.")
     cv_files_iter = files_to_cv_files(targets_file, molecules_file, k=k,
@@ -160,6 +162,10 @@ def run_cv(molecules_file, test_targets_file, test_molecules_file,
     mean_auc : float
         Average AUC over targets or molecules (depending on `type`).
     """
+    if not cv_method.is_trained():
+        logging.info("Training model. {}".format(msg))
+        cv_method.train(train_molecules_file, train_targets_file)
+
     if (os.path.isfile(auc_file) and os.path.isfile(roc_file) and
             not overwrite):
         logging.info("Loading CV results from files.{}".format(msg))
