@@ -4,6 +4,7 @@ Author: Seth Axen
 E-mail: seth.axen@gmail.com
 """
 import os
+import glob
 import logging
 import cPickle as pickle
 
@@ -25,7 +26,9 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
                  affinity=10000, split_by="targets", cv_type="targets",
                  targets_name="targets", out_dir=os.getcwd(), overwrite=False,
                  auc_file="aucs.pkl.gz", roc_file="rocs.pkl.gz",
-                 cv_method_class=SEASearchCVMethod, parallelizer=None):
+                 metrics_labels_file="metrics_labels.pkl.gz",
+                 combined_roc_file=False, cv_method_class=SEASearchCVMethod,
+                 parallelizer=None):
     """Run k-fold cross-validation on input files.
 
     Parameters
@@ -63,6 +66,10 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
         Filename to which to write AUCs dict.
     roc_file : str, optional
         Filename to which to write ROCs dict.
+    metrics_labels_file : str, optional
+        Filename to which to write raw metrics and labels for computing ROCs.
+    combined_roc_file : bool, optional
+        Compute and save combined ROC curve for all `k` sets.
     cv_method_class : type of CVMethod, optional
         Method to use for building a training model and comparing a test set
         of molecules against a training set.
@@ -73,11 +80,6 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
     -------
     mean_auc : float
         Average AUC over all k CV runs.
-
-    Raises
-    ------
-    ValueError
-        Description
     """
     if cv_type == "molecules" and split_by != "molecules":
         raise ValueError("If `cv_type` is 'molecules', `split_by` must also ",
@@ -87,7 +89,7 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
 
     cv_method = cv_method_class(out_dir=out_dir, overwrite=overwrite)
     if cv_method is SEASearchCVMethod:  # SEA's fitting can be done before splitting
-        logging.info("Training model. {}".format(msg))
+        logging.info("Training model.")
         cv_method.train(molecules_file, targets_file)
 
     logging.info("Writing cross-validation files.")
@@ -105,12 +107,13 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
         cv_dir = os.path.dirname(train_targets_file)
         cv_auc_file = os.path.join(cv_dir, auc_file)
         cv_roc_file = os.path.join(cv_dir, roc_file)
+        cv_metrics_labels_file = os.path.join(cv_dir, metrics_labels_file)
         results_file = os.path.join(cv_dir, "results.pkl.gz")
         args_list.append((molecules_file, test_targets_file,
                           test_molecules_file, train_targets_file,
-                          train_molecules_file,
-                          cv_auc_file, cv_roc_file, results_file,
-                          cv_method, cv_type, msg, overwrite))
+                          train_molecules_file, cv_auc_file, cv_roc_file,
+                          cv_metrics_labels_file, results_file, cv_method,
+                          cv_type, msg, overwrite))
 
     if parallelizer is not None:
         mean_aucs = np.asarray(
@@ -119,6 +122,33 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
     else:
         mean_aucs = np.asarray([run_cv(*x) for x in args_list],
                                dtype=np.double)
+
+    if combined_roc_file and (overwrite or not os.path.isfile(roc_file)):
+        logging.info("Computing combined ROC curve.")
+        fns = os.path.join(out_dir, "*", metrics_labels_file)
+        if len(fns) == 0:
+            logging.warning(
+                "Combined ROC curve cannot be calculated because data files do not exist.")
+        else:
+            metrics_arrays = []
+            labels_arrays = []
+            for fn in fns:
+                with open(fn, "rb") as f:
+                    metrics_labels = pickle.load(f)
+                    metrics, labels = zip(*metrics_labels.values())
+                    metrics_arrays.append(metrics)
+                    labels_arrays.append(labels)
+            metrics = np.hstack(metrics_arrays)
+            labels = np.hstack(labels_arrays)
+            fp_tp_rates, thresholds, roc_auc = metrics_to_roc_auc(
+                metrics[0], labels, order=cv_method.order)
+            comb_roc_auc = np.mean([x for x in roc_auc.values()
+                                    if x is not None])
+            logging.info("Combined ROC AUC: {:.4f}.".format(comb_roc_auc))
+            with smart_open(roc_file, "wb") as f:
+                pickle.dump(fp_tp_rates, f)
+            logging.info("Wrote combined ROC file to {}".format(roc_file))
+
     cv_mean_auc = np.mean(mean_aucs)
     logging.info("CV Mean AUC: {:.4f}.".format(cv_mean_auc))
 
@@ -127,8 +157,8 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
 
 def run_cv(molecules_file, test_targets_file, test_molecules_file,
            train_targets_file, train_molecules_file, auc_file, roc_file,
-           results_file, cv_method, cv_type="targets", msg="",
-           overwrite=False):
+           metrics_labels_file, results_file, cv_method, cv_type="targets",
+           msg="", overwrite=False):
     """Run a single cross-validation on input training/test files.
 
     Parameters
@@ -147,6 +177,8 @@ def run_cv(molecules_file, test_targets_file, test_molecules_file,
         File to which to write AUCs.
     roc_file : str
         File to which to write ROCs.
+    metrics_labels_file : TYPE
+        Filename to which to write raw metrics and labels for computing ROCs.
     results_file : str
         File to which to write results.
     cv_method : CVMethod
@@ -178,7 +210,8 @@ def run_cv(molecules_file, test_targets_file, test_molecules_file,
     else:
         logging.info(
             "Searching test against training.{}".format(msg))
-        fp_tp_rates_dict, aucs_dict, results_dict = cv_files_to_roc_auc(
+        (metrics_labels, fp_tp_rates_dict,
+         aucs_dict, results_dict) = cv_files_to_roc_auc(
             molecules_file, test_targets_file, test_molecules_file,
             train_targets_file, train_molecules_file, cv_method,
             cv_type=cv_type)
@@ -194,6 +227,10 @@ def run_cv(molecules_file, test_targets_file, test_molecules_file,
         if overwrite or not os.path.isfile(results_file):
             with smart_open(results_file, "wb") as f:
                 pickle.dump(results_dict, f)
+
+        if overwrite or not os.path.isfile(metrics_labels_file):
+            with smart_open(metrics_labels_file, "wb") as f:
+                pickle.dump(metrics_labels, f)
 
     mean_auc = np.mean([x for x in aucs_dict.values() if x is not None])
     logging.info("Mean AUC: {:.4f}{}.".format(mean_auc, msg))
@@ -218,6 +255,8 @@ def cv_files_to_roc_auc(molecules_file, test_targets_file,
         Targets and corresponding molecules in training set
     train_molecules_file : str
         Training molecules.
+    cv_method : CVMethod
+        Method to use for cross-validation
     affinity : int, optional
         Affinity level of binders to consider.
     cv_type : str, optional
@@ -225,6 +264,11 @@ def cv_files_to_roc_auc(molecules_file, test_targets_file,
 
     Returns
     -------
+    metrics_labels : dict
+        Dict matching mol_name or target_key to a tuple of metrics and labels.
+        Metrics is an nxN array where the first row contains the metric used
+        for ROC thresholds. labels is a length N array containing 1 for
+        positives and 0 for negatives in the test set.
     fp_tp_rates_dict : dict
         Dict matching a key to an 2xN array with false positive rates and true
         positive rates at the same N thresholds. If `cv_type` is 'targets',
@@ -234,6 +278,9 @@ def cv_files_to_roc_auc(molecules_file, test_targets_file,
     aucs_dict : dict
         Dict matching key (same as in `fp_tp_rates_dict`) to AUC for ROC
         curve.
+    results : dict
+        Raw results dict of format
+        {mol_name: {target_key: (metric1,...),...},...}.
     """
     if cv_type not in ("targets", "molecules"):
         raise ValueError(
@@ -241,6 +288,7 @@ def cv_files_to_roc_auc(molecules_file, test_targets_file,
 
     aucs_dict = {}
     fp_tp_rates_dict = {}
+    metrics_labels = {}
     _, mol_lists_dict, _ = molecules_to_lists_dicts(molecules_file)
     all_molecules = set(mol_lists_dict.keys())
     # del mol_lists_dict
@@ -277,6 +325,7 @@ def cv_files_to_roc_auc(molecules_file, test_targets_file,
                 [results.get(x, {}).get(target_key, cv_method.default_metric)
                  for x in tested_mols], dtype=np.double).T
 
+            metrics_labels[target_key] = (metrics, true_false)
             fp_tp_rates, thresholds, auc = metrics_to_roc_auc(
                 metrics[0], true_false, name=target_key.tid,
                 order=cv_method.order)
@@ -306,12 +355,13 @@ def cv_files_to_roc_auc(molecules_file, test_targets_file,
                                                cv_method.default_metric)
                  for target_key in tested_targets], dtype=np.double).T
 
+            metrics_labels[mol_name] = (metrics, true_false)
             fp_tp_rates, thresholds, auc = metrics_to_roc_auc(
                 metrics[0], true_false, name=mol_name, order=cv_method.order)
             fp_tp_rates_dict[mol_name] = fp_tp_rates
             aucs_dict[mol_name] = auc
 
-    return fp_tp_rates_dict, aucs_dict, results
+    return metrics_labels, fp_tp_rates_dict, aucs_dict, results
 
 
 def metrics_to_roc_auc(metrics, true_false, name=None, order="greater"):
