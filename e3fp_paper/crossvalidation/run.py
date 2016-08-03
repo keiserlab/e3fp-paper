@@ -5,6 +5,7 @@ E-mail: seth.axen@gmail.com
 """
 import os
 import glob
+import tempfile
 import logging
 import cPickle as pickle
 
@@ -130,18 +131,31 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
             logging.warning(
                 "Combined ROC curve cannot be calculated because data files do not exist.")
         else:
-            metrics_arrays = []
-            labels_arrays = []
+            # use memmap because these arrays are massive
+            memmap = None
+            memmap_fn = tempfile.mkstemp(".dat")
+            curr_ind = 0
             for fn in fns:
                 with smart_open(fn, "rb") as f:
                     metrics_labels = pickle.load(f)
-                    metrics, labels = zip(*metrics_labels.values())
-                    metrics_arrays.extend(metrics)
-                    labels_arrays.extend(labels)
-            metrics = np.hstack(metrics_arrays)
-            labels = np.hstack(labels_arrays)
+                    if memmap is None:
+                        roc_num = len(metrics_labels) * k
+                        label_num = len(metrics_labels.values()[0][0])
+                        memmap = np.memmap(memmap_fn, dtype='float64',
+                                           mode='w+',
+                                           shape=(2, roc_num * label_num),
+                                           order='F')
+                        logging.info("Opened memmap with shape {}".format(memmap.shape))
+                    for metrics, labels in metrics_labels.itervalues():
+                        new_ind = curr_ind + metrics.shape[1]
+                        memmap[0, curr_ind:new_ind] = metrics[0]
+                        memmap[1, curr_ind:new_ind] = labels[:]
+                        curr_ind = new_ind
+                    del metrics_labels
+            logging.info("Filled {} indices of memmap".format(curr_ind))
             comb_fp_tp, _, comb_roc_auc = metrics_to_roc_auc(
-                metrics[0], labels, order=cv_method.order)
+                memmap[0, :], memmap[1, :], order=cv_method.order)
+            os.remove(memmap_fn)
             logging.info("Combined ROC AUC: {:.4f}.".format(comb_roc_auc))
             with smart_open(roc_file, "wb") as f:
                 pickle.dump(comb_fp_tp, f)
