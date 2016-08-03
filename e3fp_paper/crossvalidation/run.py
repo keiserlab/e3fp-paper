@@ -133,28 +133,29 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
         else:
             # use memmap because these arrays are massive
             memmap = None
-            memmap_fn = tempfile.mkstemp(".dat")
+            _, memmap_fn = tempfile.mkstemp(".dat")
             curr_ind = 0
+            memmap_len_mult = 2.  # double the length of memmap, just to be safe
             for fn in fns:
                 with smart_open(fn, "rb") as f:
                     metrics_labels = pickle.load(f)
                     if memmap is None:
                         roc_num = len(metrics_labels) * k
-                        label_num = len(metrics_labels.values()[0][0])
+                        label_num = max([x[1].shape[0] for x in metrics_labels.itervalues()])
                         memmap = np.memmap(memmap_fn, dtype='float64',
                                            mode='w+',
-                                           shape=(2, roc_num * label_num),
+                                           shape=(2, int(memmap_len_mult * roc_num * label_num)),
                                            order='F')
-                        logging.info("Opened memmap with shape {}".format(memmap.shape))
+                        logging.debug("Opened memmap with shape {}".format(memmap.shape))
                     for metrics, labels in metrics_labels.itervalues():
                         new_ind = curr_ind + metrics.shape[1]
                         memmap[0, curr_ind:new_ind] = metrics[0]
                         memmap[1, curr_ind:new_ind] = labels[:]
                         curr_ind = new_ind
                     del metrics_labels
-            logging.info("Filled {} indices of memmap".format(curr_ind))
+            logging.debug("Filled {} indices of memmap".format(curr_ind))
             comb_fp_tp, _, comb_roc_auc = metrics_to_roc_auc(
-                memmap[0, :], memmap[1, :], order=cv_method.order)
+                memmap[0, :new_ind], memmap[1, :new_ind], order=cv_method.order)
             os.remove(memmap_fn)
             logging.info("Combined ROC AUC: {:.4f}.".format(comb_roc_auc))
             with smart_open(roc_file, "wb") as f:
@@ -422,7 +423,7 @@ def metrics_to_roc_auc(metrics, true_false, name=None, order="greater"):
         metrics = -metrics
 
     fpr, tpr, thresholds = roc_curve(true_false, metrics)
-    roc_auc = get_auc(fpr, tpr)
+    roc_auc = float(get_auc(fpr, tpr))
     fp_tp_rates = np.array([fpr, tpr], dtype=np.double)
 
     return fp_tp_rates, thresholds, roc_auc
