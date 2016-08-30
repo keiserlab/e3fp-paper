@@ -358,6 +358,7 @@ class SKLearnCVMethodBase(CVMethod):
             with smart_open(self.fit_file, "r") as f:
                 target_fits = pkl.load(f)
 
+        logging.info("Searching molecules against targets.")
         results = {mol_name: {} for mol_name
                    in test_mol_indices_dict.iterkeys()}
         target_num = len(target_fits)
@@ -366,8 +367,8 @@ class SKLearnCVMethodBase(CVMethod):
                 target_key.tid, i, target_num))
             scores = self.calculate_metric(clf, test_fps)
             for mol_name, mol_inds in test_mol_indices_dict.iteritems():
-                max_score = np.amax(scores[mol_inds])
-                results[mol_name][target_key] = max_score
+                max_score = float(max(scores[mol_inds]))
+                results[mol_name][target_key] = (max_score,)
         return results
 
 
