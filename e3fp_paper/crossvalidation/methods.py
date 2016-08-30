@@ -46,7 +46,6 @@ class CVMethod(object):
         """
         self.out_dir = out_dir
         self.overwrite = overwrite
-        self.order = "greater"  # A greater value of the above metric is better
 
     def train(self, molecules_file, targets_file):
         """Train the model.
@@ -61,20 +60,15 @@ class CVMethod(object):
         if self.is_trained() and self.overwrite:
             logging.warning("Re-training model for cross-validation.")
 
-    def compare(self, test_mol_lists_dict, train_molecules_file,
-                train_targets_file, cv_dir=""):
-        """Compare test molecules against training targets using model.
+    def test(self, test_mol_lists_dict):
+        """Score test molecules against using trained model.
+
+        A high score should correspond to a more positive prediction.
 
         Parameters
         ----------
         test_mol_lists_dict : str
             Mol lists dict for test molecules.
-        train_molecules_file : str
-            SEA format molecules file for training molecules.
-        train_targets_file : str
-            SEA format targets file for training molecules.
-        cv_dir : str, optional
-            Directory in which to save any output files.
 
         Returns
         -------
@@ -98,7 +92,7 @@ class SEASearchCVMethod(CVMethod):
         self.fit_file = os.path.join(self.out_dir, "library.fit")
         self.default_metric = (0.0, 0.0)  # (-log(p-value), tc)
 
-    def train(self, molecules_file, targets_file, generate_fit=True):
+    def train(self, molecules_file, targets_file):
         """Determine significance threshold and build SEA library.
 
         Parameters
@@ -107,32 +101,19 @@ class SEASearchCVMethod(CVMethod):
             SEA format molecules file.
         targets_file : str
             SEA format targets file.
-        generate_fit : bool, optional
-            Generate fit against background Tanimoto distribution.
         """
         super(SEASearchCVMethod, self).train(molecules_file, targets_file)
-        if os.path.isfile(self.fit_file) and not self.overwrite:
-            logging.warning("Fit file already exists. Will not generate fit.")
-            generate_fit = False
-
         if self.overwrite or not self.is_trained():
             build_library(self.library_file, molecules_file, targets_file,
-                          self.fit_file, generate_fit=generate_fit)
+                          self.fit_file, generate_fit=True)
 
-    def compare(self, test_mol_lists_dict, train_molecules_file,
-                train_targets_file, cv_dir=None):
+    def test(self, test_mol_lists_dict):
         """Compare test molecules against training targets using SEA.
 
         Parameters
         ----------
         test_mol_lists_dict : str
             Mol lists dict for test molecules.
-        train_molecules_file : str
-            SEA format molecules file for training molecules.
-        train_targets_file : str
-            SEA format targets file for training molecules.
-        cv_dir : str, optional
-            Directory in which to save any output files.
 
         Returns
         -------
@@ -143,19 +124,9 @@ class SEASearchCVMethod(CVMethod):
             pair, and tc is the max Tanimoto coefficient between a test
             fingerprint and a fingerprint in the training set for that target.
         """
-        if cv_dir is None:
-            cv_dir = self.out_dir
-        train_library_file = os.path.join(cv_dir, "library.sea")
-
-        if self.overwrite or not os.path.isfile(train_library_file):
-            logging.info("Building library for training set.")
-            build_library(train_library_file, train_molecules_file,
-                          train_targets_file, self.fit_file,
-                          generate_fit=False)
-
         logging.info("Searching {:d} fingerprints against {}.".format(
-            len(test_mol_lists_dict), train_library_file))
-        results = sea_set_search(train_library_file, test_mol_lists_dict,
+            len(test_mol_lists_dict), self.library_file))
+        results = sea_set_search(self.library_file, test_mol_lists_dict,
                                  log=True)
 
         results = results.set_results_dict
@@ -322,20 +293,13 @@ class SKLearnCVMethodBase(CVMethod):
             with smart_open(self.fit_file, "w") as f:
                 pkl.dump(target_fits, f)
 
-    def compare(self, test_mol_lists_dict, train_molecules_file=None,
-                train_targets_file=None, cv_dir=None):
+    def test(self, test_mol_lists_dict):
         """Compare test molecules against training targets using classifier.
 
         Parameters
         ----------
         test_mol_lists_dict : str
             Mol lists dict for test molecules.
-        train_molecules_file : str, optional
-            SEA format molecules file for training molecules. Not used.
-        train_targets_file : str, optional
-            SEA format targets file for training molecules. Not used.
-        cv_dir : str, optional
-            Directory in which to save any output files.
 
         Returns
         -------
@@ -344,9 +308,6 @@ class SKLearnCVMethodBase(CVMethod):
             {mol_name: {target_key: (metric1, ...), ...}, ...}, where
             where metric1 is the metric used to construct ROC curve.
         """
-        if cv_dir is None:
-            cv_dir = self.out_dir
-
         logging.info("Loading test molecules.")
         test_fps, test_mol_indices_dict = self.molecules_to_array(
             test_mol_lists_dict)

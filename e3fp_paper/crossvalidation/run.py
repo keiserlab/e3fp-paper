@@ -303,14 +303,12 @@ def cv_files_to_roc_auc(molecules_file, test_targets_file,
     metrics_labels = {}
     _, mol_lists_dict, _ = molecules_to_lists_dicts(molecules_file)
     all_molecules = set(mol_lists_dict.keys())
-    # del mol_lists_dict
+    del mol_lists_dict
 
     _, test_mol_lists_dict, _ = molecules_to_lists_dicts(test_molecules_file)
     del _
 
-    results = cv_method.compare(test_mol_lists_dict, train_molecules_file,
-                                train_targets_file,
-                                cv_dir=os.path.dirname(train_targets_file))
+    results = cv_method.test(test_mol_lists_dict)
 
     train_targets_dict = mol_lists_targets_to_targets(
         targets_to_dict(train_targets_file))
@@ -339,8 +337,7 @@ def cv_files_to_roc_auc(molecules_file, test_targets_file,
 
             metrics_labels[target_key] = (metrics, true_false)
             fp_tp_rates, thresholds, auc = metrics_to_roc_auc(
-                metrics[0], true_false, name=target_key.tid,
-                order=cv_method.order)
+                metrics[0], true_false, name=target_key.tid)
 
             fp_tp_rates_dict[target_key] = fp_tp_rates
             aucs_dict[target_key] = auc
@@ -369,7 +366,7 @@ def cv_files_to_roc_auc(molecules_file, test_targets_file,
 
             metrics_labels[mol_name] = (metrics, true_false)
             fp_tp_rates, thresholds, auc = metrics_to_roc_auc(
-                metrics[0], true_false, name=mol_name, order=cv_method.order)
+                metrics[0], true_false, name=mol_name)
             fp_tp_rates_dict[mol_name] = fp_tp_rates
             aucs_dict[mol_name] = auc
 
