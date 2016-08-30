@@ -86,13 +86,6 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
         raise ValueError("If `cv_type` is 'molecules', `split_by` must also ",
                          "be 'molecules'.")
 
-    touch_dir(out_dir)
-
-    cv_method = cv_method_class(out_dir=out_dir, overwrite=overwrite)
-    if cv_method is SEASearchCVMethod:  # SEA's fitting can be done before splitting
-        logging.info("Training model.")
-        cv_method.train(molecules_file, targets_file)
-
     logging.info("Writing cross-validation files.")
     cv_files_iter = files_to_cv_files(targets_file, molecules_file, k=k,
                                       n=min_mols, affinity=affinity,
@@ -113,8 +106,8 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
         args_list.append((molecules_file, test_targets_file,
                           test_molecules_file, train_targets_file,
                           train_molecules_file, cv_auc_file, cv_roc_file,
-                          cv_metrics_labels_file, results_file, cv_method,
-                          cv_type, msg, overwrite))
+                          cv_metrics_labels_file, results_file,
+                          cv_method_class, cv_type, msg, overwrite, cv_dir))
 
     if parallelizer is not None:
         mean_aucs = np.asarray(
@@ -155,7 +148,7 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
                     del metrics_labels
             logging.debug("Filled {} indices of memmap".format(curr_ind))
             comb_fp_tp, _, comb_roc_auc = metrics_to_roc_auc(
-                memmap[0, :new_ind], memmap[1, :new_ind], order=cv_method.order)
+                memmap[0, :new_ind], memmap[1, :new_ind])
             os.remove(memmap_fn)
             logging.info("Combined ROC AUC: {:.4f}.".format(comb_roc_auc))
             with smart_open(roc_file, "wb") as f:
@@ -170,8 +163,8 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
 
 def run_cv(molecules_file, test_targets_file, test_molecules_file,
            train_targets_file, train_molecules_file, auc_file, roc_file,
-           metrics_labels_file, results_file, cv_method, cv_type="targets",
-           msg="", overwrite=False):
+           metrics_labels_file, results_file, cv_method_class,
+           cv_type="targets", msg="", overwrite=False, out_dir=None):
     """Run a single cross-validation on input training/test files.
 
     Parameters
@@ -194,24 +187,30 @@ def run_cv(molecules_file, test_targets_file, test_molecules_file,
         Filename to which to write raw metrics and labels for computing ROCs.
     results_file : str
         File to which to write results.
-    cv_method : CVMethod
-        Method to use for comparison of test molecules against training
-        molecules.
+    cv_method_class : Type
+        CVMethod class to use for comparison of test molecules against
+        training molecules.
     cv_type : str, optional
         Type of cross-validation to run. Options are 'targets' or 'molecules'.
     msg : str, optional
         Message to append to log messages.
     overwrite : bool, optional
         Overwrite files.
+    out_dir : str, optional
+        Directory in which to save fit files. Defaults to directory where
+        input files are contained.
 
     Returns
     -------
     mean_auc : float
         Average AUC over targets or molecules (depending on `type`).
     """
-    if not cv_method.is_trained():
-        logging.info("Training model. {}".format(msg))
-        cv_method.train(train_molecules_file, train_targets_file)
+    if out_dir is None:
+        out_dir = os.path.dirname(train_molecules_file)
+    touch_dir(out_dir)
+    cv_method = cv_method_class(out_dir=out_dir, overwrite=overwrite)
+    logging.info("Training model. {}".format(msg))
+    cv_method.train(train_molecules_file, train_targets_file)
 
     if (os.path.isfile(auc_file) and os.path.isfile(roc_file) and
             not overwrite):
