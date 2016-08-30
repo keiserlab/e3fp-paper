@@ -28,7 +28,7 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
                  targets_name="targets", out_dir=os.getcwd(), overwrite=False,
                  auc_file="aucs.pkl.gz", roc_file="rocs.pkl.gz",
                  metrics_labels_file="metrics_labels.pkl.gz",
-                 combined_roc_file=True, cv_method_class=SEASearchCVMethod,
+                 combined_roc_file=False, cv_method_class=SEASearchCVMethod,
                  parallelizer=None):
     """Run k-fold cross-validation on input files.
 
@@ -236,13 +236,13 @@ def run_cv(molecules_file, test_targets_file, test_molecules_file,
             with smart_open(roc_file, "wb") as f:
                 pickle.dump(fp_tp_rates_dict, f)
 
-        if overwrite or not os.path.isfile(results_file):
-            with smart_open(results_file, "wb") as f:
-                pickle.dump(results_dict, f)
+        # if overwrite or not os.path.isfile(results_file):
+        #     with smart_open(results_file, "wb") as f:
+        #         pickle.dump(results_dict, f)
 
-        if overwrite or not os.path.isfile(metrics_labels_file):
-            with smart_open(metrics_labels_file, "wb") as f:
-                pickle.dump(metrics_labels, f)
+        # if overwrite or not os.path.isfile(metrics_labels_file):
+        #     with smart_open(metrics_labels_file, "wb") as f:
+        #         pickle.dump(metrics_labels, f)
 
     mean_auc = np.mean([x for x in aucs_dict.values() if x is not None])
     logging.info("Mean AUC: {:.4f}{}.".format(mean_auc, msg))
