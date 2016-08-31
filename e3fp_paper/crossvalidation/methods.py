@@ -367,7 +367,7 @@ class SVMCVMethod(SKLearnCVMethodBase):
 
     def test(self, *args):
         # batch kernel calculations use a lot of memory
-        super(SVMCVMethod, self).__init__(*args, batch=False)
+        super(SVMCVMethod, self).test(*args, batch=False)
 
 
 class RandomForestCVMethod(SKLearnCVMethodBase):
