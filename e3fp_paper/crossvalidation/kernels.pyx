@@ -36,12 +36,14 @@ def tanimoto_kernel(X, Y):
           doi: 10.1.1.92.483
     """
     try:
-        return tanimoto_kernel_sparse_(X.indptr, X.indices, X.shape[0],
-                                       Y.indptr, Y.indices, Y.shape[0],
-                                       X.shape[1])
+        tanimoto =  tanimoto_kernel_sparse_(X.indptr, X.indices, X.shape[0],
+                                            Y.indptr, Y.indices, Y.shape[0],
+                                            X.shape[1])
     except AttributeError:
-        return tanimoto_kernel_dense_(np.asarray(X, dtype=DTYPE),
-                                      np.asarray(Y, dtype=DTYPE))
+        tanimoto = tanimoto_kernel_dense_(np.asarray(X, dtype=DTYPE),
+                                          np.asarray(Y, dtype=DTYPE))
+
+    return np.asarray(tanimoto, dtype=DTYPE)
 
 
 @cython.boundscheck(False)
