@@ -14,7 +14,7 @@ import numpy as np
 import scipy as sc
 from sklearn import svm
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.naive_bayes import MultinomialNB
+from sklearn.naive_bayes import BernoulliNB
 from sklearn.externals import joblib
 
 from python_utilities.io_tools import smart_open
@@ -378,7 +378,7 @@ class NaiveBayesCVMethod(SKLearnCVMethodBase):
 
     @staticmethod
     def create_clf():
-        return MultinomialNB(alpha=1.0, fit_prior=True)
+        return BernoulliNB(alpha=1.0, fit_prior=True)
 
 
 def tanimoto_kernel(X, Y):
