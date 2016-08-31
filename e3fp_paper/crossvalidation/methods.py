@@ -293,7 +293,7 @@ class SKLearnCVMethodBase(CVMethod):
             with smart_open(self.fit_file, "w") as f:
                 pkl.dump(target_fits, f)
 
-    def test(self, test_mol_lists_dict):
+    def test(self, test_mol_lists_dict, batch=True):
         """Compare test molecules against training targets using classifier.
 
         Parameters
@@ -326,10 +326,16 @@ class SKLearnCVMethodBase(CVMethod):
         for i, (target_key, clf) in enumerate(target_fits.iteritems()):
             logging.debug("Searching {} against molecules ({}/{}).".format(
                 target_key.tid, i, target_num))
-            scores = self.calculate_metric(clf, test_fps)
-            for mol_name, mol_inds in test_mol_indices_dict.iteritems():
-                max_score = float(max(scores[mol_inds]))
-                results[mol_name][target_key] = (max_score,)
+            if batch:
+                scores = self.calculate_metric(clf, test_fps)
+                for mol_name, mol_inds in test_mol_indices_dict.iteritems():
+                    max_score = float(max(scores[mol_inds]))
+                    results[mol_name][target_key] = (max_score,)
+            else:
+                for mol_name, mol_inds in test_mol_indices_dict.iteritems():
+                    scores = self.calculate_metric(clf, test_fps[mol_inds])
+                    max_score = float(max(scores[mol_inds]))
+                    results[mol_name][target_key] = (max_score,)
         return results
 
 
@@ -358,6 +364,10 @@ class SVMCVMethod(SKLearnCVMethodBase):
             NxM array with N data points and M features.
         """
         return clf.decision_function(data)
+
+    def test(self, *args):
+        # batch kernel calculations use a lot of memory
+        super(SVMCVMethod, self).__init__(*args, batch=False)
 
 
 class RandomForestCVMethod(SKLearnCVMethodBase):
