@@ -231,11 +231,11 @@ class SKLearnCVMethodBase(CVMethod):
                                            native_tuples), row_inds)])
             all_col_inds.extend(itertools.chain(*col_inds))
             all_row_inds.extend(itertools.chain(*row_inds))
-        # csr matrix as np.float64 for quick classification
+        # csr matrix as np.float32 for quick classification
         all_fps = sc.sparse.coo_matrix(([True] * len(all_row_inds),
                                         (all_row_inds, all_col_inds)),
                                        shape=(fp_num, bit_num),
-                                       dtype=np.float64).tocsr()
+                                       dtype=np.float32).tocsr()
         del mol_list_dict, all_col_inds, all_row_inds
         return all_fps, mol_indices_dict
 
@@ -341,7 +341,7 @@ class SVMCVMethod(SKLearnCVMethodBase):
 
     @staticmethod
     def create_clf():
-        return svm.SVC(kernel=minmax_kernel, random_state=RANDOM_STATE)
+        return svm.SVC(kernel=tanimoto_kernel, random_state=RANDOM_STATE)
 
     @staticmethod
     def calculate_metric(clf, data):
@@ -381,11 +381,10 @@ class NaiveBayesCVMethod(SKLearnCVMethodBase):
         return MultinomialNB(alpha=1.0, fit_prior=True)
 
 
-def minmax_kernel(X, Y):
-    """MinMax kernel for use in kernel methods.
+def tanimoto_kernel(X, Y):
+    """Tanimoto kernel for use in kernel methods.
 
-    Abstracts to Tanimoto given binary input data. For bitvector, theoretical
-    bounds for any u,v molecule pair would be [0,1].
+    Data must be binary. This is not checked.
 
     Parameters
     ----------
@@ -397,7 +396,7 @@ def minmax_kernel(X, Y):
     Returns
     ----------
     ndarray of np.float64
-        Min-Max similarity between X and Y fingerprints
+        Tanimoto similarity between X and Y fingerprints
 
     References
     ----------
@@ -405,16 +404,13 @@ def minmax_kernel(X, Y):
           chemical informatics." Neural Networks. 2005. 18(8): 1093-1110.
           doi: 10.1.1.92.483
     """
-    minkernel = X.dot(Y.transpose())  # bit intersection count
-    try:
-        X = X.toarray()
+    try:  # convert sparse arrays to dense
+        X, Y = X.toarray(), Y.toarray()
     except AttributeError:
         pass
-    try:
-        Y = Y.toarray()
-    except AttributeError:
-        pass
-
-    maxkernel = X.shape[1] - np.dot(1 - X, (1 - Y).T)  # bit union count
+    Xbits = (X ** 2).sum(axis=1).reshape(X.shape[0], 1)
+    Ybits = (Y ** 2).sum(axis=1).reshape(Y.shape[0], 1)
+    XYbits = X.dot(Y.T)
     with np.errstate(divide='ignore'):  # handle 0 in denominator
-        return np.asarray(np.nan_to_num(minkernel / maxkernel))
+        return np.asarray(np.nan_to_num(XYbits / (Xbits + Ybits.T - XYbits)),
+                          dtype=np.float64)
