@@ -1,4 +1,4 @@
-"""Various classes for cross-validation.
+"""Various methods for cross-validation.
 
 Author: Seth Axen
 E-mail: seth.axen@gmail.com
@@ -24,6 +24,7 @@ from e3fp_paper.sea_utils.util import molecules_to_lists_dicts, \
 from e3fp_paper.sea_utils.library import build_library
 from e3fp_paper.sea_utils.run import sea_set_search
 from e3fp_paper.pipeline import native_tuple_to_fprint
+from e3fp_paper.crossvalidation.kernels import tanimoto_kernel
 
 RANDOM_STATE = 42
 
@@ -381,36 +382,36 @@ class NaiveBayesCVMethod(SKLearnCVMethodBase):
         return BernoulliNB(alpha=1.0, fit_prior=True)
 
 
-def tanimoto_kernel(X, Y):
-    """Tanimoto kernel for use in kernel methods.
+# def tanimoto_kernel(X, Y):
+#     """Tanimoto kernel for use in kernel methods.
 
-    Data must be binary. This is not checked.
+#     Data must be binary. This is not checked.
 
-    Parameters
-    ----------
-    X : ndarray or csr_matrix of np.float64
-        MxP bitvector array for M mols and P bits
-    Y : np.array or csr_matrix of np.float64
-        NxP bitvector array for N mols and P bits
+#     Parameters
+#     ----------
+#     X : ndarray or csr_matrix of np.float64
+#         MxP bitvector array for M mols and P bits
+#     Y : np.array or csr_matrix of np.float64
+#         NxP bitvector array for N mols and P bits
 
-    Returns
-    ----------
-    ndarray of np.float64
-        Tanimoto similarity between X and Y fingerprints
+#     Returns
+#     ----------
+#     ndarray of np.float64
+#         Tanimoto similarity between X and Y fingerprints
 
-    References
-    ----------
-    ..[1] L. Ralaivola, S.J. Swamidass, H. Saigo, P. Baldi."Graph kernels for
-          chemical informatics." Neural Networks. 2005. 18(8): 1093-1110.
-          doi: 10.1.1.92.483
-    """
-    try:  # convert sparse arrays to dense
-        X, Y = X.toarray(), Y.toarray()
-    except AttributeError:
-        pass
-    Xbits = (X ** 2).sum(axis=1).reshape(X.shape[0], 1)
-    Ybits = (Y ** 2).sum(axis=1).reshape(Y.shape[0], 1)
-    XYbits = X.dot(Y.T)
-    with np.errstate(divide='ignore'):  # handle 0 in denominator
-        return np.asarray(np.nan_to_num(XYbits / (Xbits + Ybits.T - XYbits)),
-                          dtype=np.float64)
+#     References
+#     ----------
+#     ..[1] L. Ralaivola, S.J. Swamidass, H. Saigo, P. Baldi."Graph kernels for
+#           chemical informatics." Neural Networks. 2005. 18(8): 1093-1110.
+#           doi: 10.1.1.92.483
+#     """
+#     try:  # convert sparse arrays to dense
+#         X, Y = X.toarray(), Y.toarray()
+#     except AttributeError:
+#         pass
+#     Xbits = X.sum(axis=1, keepdims=True)
+#     Ybits = Y.sum(axis=1, keepdims=True)
+#     XYbits = X.dot(Y.T)
+#     with np.errstate(divide='ignore'):  # handle 0 in denominator
+#         return np.asarray(np.nan_to_num(XYbits / (Xbits + Ybits.T - XYbits)),
+#                           dtype=np.float64)
