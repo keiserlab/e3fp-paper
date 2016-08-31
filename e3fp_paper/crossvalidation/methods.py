@@ -333,8 +333,8 @@ class SKLearnCVMethodBase(CVMethod):
                     results[mol_name][target_key] = (max_score,)
             else:
                 for mol_name, mol_inds in test_mol_indices_dict.iteritems():
-                    scores = self.calculate_metric(clf, test_fps[mol_inds])
-                    max_score = float(max(scores[mol_inds]))
+                    scores = self.calculate_metric(clf, test_fps[mol_inds, :])
+                    max_score = float(max(scores))
                     results[mol_name][target_key] = (max_score,)
         return results
 
