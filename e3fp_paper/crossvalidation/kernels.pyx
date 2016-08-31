@@ -7,6 +7,7 @@ import cython
 cimport cython
 import numpy as np
 cimport numpy as np
+import scipy as sc
 
 DTYPE = np.float64
 ctypedef np.float64_t DTYPE_t
@@ -35,11 +36,11 @@ def tanimoto_kernel(X, Y):
           chemical informatics." Neural Networks. 2005. 18(8): 1093-1110.
           doi: 10.1.1.92.483
     """
-    try:
+    if isinstance(X, sc.sparse.csr_matrix):
         return tanimoto_kernel_sparse_(X.indptr, X.indices, X.shape[0],
                                        Y.indptr, Y.indices, Y.shape[0],
                                        X.shape[1])
-    except AttributeError:
+    else:
         return tanimoto_kernel_dense_(np.asarray(X, dtype=DTYPE),
                                       np.asarray(Y, dtype=DTYPE))
 
