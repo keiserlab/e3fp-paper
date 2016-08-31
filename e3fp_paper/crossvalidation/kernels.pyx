@@ -15,7 +15,8 @@ ctypedef np.float64_t DTYPE_t
 def tanimoto_kernel(X, Y):
     """Tanimoto kernel for use in kernel methods.
 
-    Data must be binary. This is not checked.
+    Data must be binary. This is not checked. Sparse matrices are converted
+    to dense arrays before computation.
 
     Parameters
     ----------
@@ -36,9 +37,8 @@ def tanimoto_kernel(X, Y):
           doi: 10.1.1.92.483
     """
     try:
-        tanimoto =  tanimoto_kernel_sparse_(X.indptr, X.indices, X.shape[0],
-                                            Y.indptr, Y.indices, Y.shape[0],
-                                            X.shape[1])
+        X = X.toarray()
+        Y = Y.toarray()
     except AttributeError:
         tanimoto = tanimoto_kernel_dense_(np.asarray(X, dtype=DTYPE),
                                           np.asarray(Y, dtype=DTYPE))
@@ -61,37 +61,5 @@ cpdef DTYPE_t[:, :] tanimoto_kernel_dense_(np.ndarray[DTYPE_t, ndim=2] X,
     Ybits = Y.sum(axis=1, keepdims=True)
     XYbits = X.dot(Y.T)
     tanimoto = XYbits / (Xbits + Ybits.T - XYbits)
-
-    return tanimoto
-
-
-@cython.boundscheck(False)
-@cython.wraparound(False)
-@cython.nonecheck(False)
-@cython.cdivision(True)
-@cython.profile(True)
-cpdef DTYPE_t[:, :] tanimoto_kernel_sparse_(int[:] X_indptr, int[:] X_indices,
-                                            int n_X, int[:] Y_indptr, int[:]
-                                            Y_indices, int n_Y, int n_feat):
-    cdef:
-        np.ndarray[DTYPE_t, ndim=2, mode="c"] tanimoto
-        np.ndarray[DTYPE_t, ndim=1, mode="c"] Xbits_arr, Ybits_arr
-        DTYPE_t XYbits
-        int i, j, k
-        
-    tanimoto = np.empty((n_X, n_Y), dtype=DTYPE, order="C")
-    Xbits_arr = np.empty((n_X,), dtype=DTYPE, order="C")
-    Ybits_arr = np.empty((n_Y,), dtype=DTYPE, order="C")
-    with nogil:
-        for i in range(n_X):
-            Xbits_arr[i] = X_indptr[i+1] - X_indptr[i]
-        for j in range(n_Y):
-            Ybits_arr[j] = Y_indptr[j+1] - Y_indptr[j]
-
-    for i in range(n_X):
-        for j in range(n_Y):
-            XYbits = len(set(X_indices[X_indptr[i]:X_indptr[i+1]]) &
-                         set(Y_indices[Y_indptr[j]:Y_indptr[j+1]]))
-            tanimoto[i, j] = XYbits / (Xbits_arr[i] + Ybits_arr[j] - XYbits)
 
     return tanimoto
