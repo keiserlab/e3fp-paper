@@ -17,7 +17,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.naive_bayes import BernoulliNB
 from sklearn.externals import joblib
 
-from python_utilities.io_tools import smart_open
+from python_utilities.io_tools import smart_open, touch_dir
 from e3fp_paper.sea_utils.util import molecules_to_lists_dicts, \
                                       targets_to_dict, \
                                       mol_lists_targets_to_targets
@@ -163,7 +163,7 @@ class SKLearnCVMethodBase(CVMethod):
     def __init__(self, out_dir="", overwrite=False):
         super(SKLearnCVMethodBase, self).__init__(out_dir=out_dir,
                                                   overwrite=overwrite)
-        self.fit_file = os.path.join(self.out_dir, "target_fits.pkl.gz")
+        self.fit_dir = os.path.join(self.out_dir, "target_fits")
 
     @staticmethod
     def create_clf():
@@ -184,7 +184,26 @@ class SKLearnCVMethodBase(CVMethod):
         return clf.predict_proba(data)[:, 1]
 
     def is_trained(self):
-        return os.path.isfile(self.fit_file)
+        return (os.path.isdir(self.fit_dir) and
+                len(os.listdir(self.fit_dir)) > 0)
+
+    def save_fit_file(self, target_key, clf):
+        """Save target fit to file."""
+        fit_file = os.path.join(self.fit_dir, target_key.tid + ".pkl.gz")
+        try:
+            joblib.dump((target_key, clf), fit_file, compress=9)
+        except OverflowError:  # zlib bug in Python 2.7
+            with smart_open(fit_file, "w") as f:
+                pkl.dump((target_key, clf), f)
+
+    def load_fit_file(self, fit_file):
+        """Load target fit from file."""
+        try:
+            target_key, clf = joblib.load(fit_file)
+        except KeyError:
+            with smart_open(fit_file, "r") as f:
+                target_key, clf = pkl.load(f)
+        return target_key, clf
 
     @staticmethod
     def molecules_to_array(molecules):
@@ -260,7 +279,7 @@ class SKLearnCVMethodBase(CVMethod):
             targets_to_dict(targets_file))
 
         logging.info("Generating target fits.")
-        target_fits = {}
+        touch_dir(self.fit_dir)
         target_num = len(targets_dict)
         target_perc_num = int(target_num / 100)
         for i, (target_key, set_value) in enumerate(targets_dict.iteritems()):
@@ -280,18 +299,11 @@ class SKLearnCVMethodBase(CVMethod):
             score = clf.score(data, pos)
             logging.debug("Fitted {} with score {:.4f} ({}/{})".format(
                 target_key.tid, score, i + 1, target_num))
-            target_fits[target_key] = clf
+            self.save_fit_file(target_key, clf)
             if (i + 1) % target_perc_num == 0:
                 logging.info("Fit {:.2f}% of targets ({}/{})".format(
                     100 * (i + 1) / float(target_num), i + 1, target_num))
-        del targets_dict, all_fps
-
-        logging.info("Saving target fits.")
-        try:
-            joblib.dump(target_fits, self.fit_file, compress=9)
-        except OverflowError:  # zlib bug in Python 2.7
-            with smart_open(self.fit_file, "w") as f:
-                pkl.dump(target_fits, f)
+        del all_fps
 
     def test(self, test_mol_lists_dict, batch=True):
         """Compare test molecules against training targets using classifier.
@@ -312,18 +324,15 @@ class SKLearnCVMethodBase(CVMethod):
         test_fps, test_mol_indices_dict = self.molecules_to_array(
             test_mol_lists_dict)
 
-        logging.info("Loading target fits.")
-        try:
-            target_fits = joblib.load(self.fit_file)
-        except KeyError:
-            with smart_open(self.fit_file, "r") as f:
-                target_fits = pkl.load(f)
+        logging.info("Fetching target fits.")
+        fit_files = os.listdir(self.fit_dir)
 
         logging.info("Searching molecules against targets.")
         results = {mol_name: {} for mol_name
                    in test_mol_indices_dict.iterkeys()}
-        target_num = len(target_fits)
-        for i, (target_key, clf) in enumerate(target_fits.iteritems()):
+        target_num = len(fit_files)
+        for i, fit_file in enumerate(fit_files):
+            target_key, clf = self.load_fit_file(fit_file)
             logging.debug("Searching {} against molecules ({}/{}).".format(
                 target_key.tid, i, target_num))
             if batch:
