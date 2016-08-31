@@ -404,13 +404,14 @@ def tanimoto_kernel(X, Y):
           chemical informatics." Neural Networks. 2005. 18(8): 1093-1110.
           doi: 10.1.1.92.483
     """
-    try:  # convert sparse arrays to dense
-        X, Y = X.toarray(), Y.toarray()
-    except AttributeError:
-        pass
-    Xbits = (X ** 2).sum(axis=1).reshape(X.shape[0], 1)
-    Ybits = (Y ** 2).sum(axis=1).reshape(Y.shape[0], 1)
-    XYbits = X.dot(Y.T)
+    if sc.sparse.issparse(X):
+        Xbits = X.sum(axis=1).reshape(X.shape[0], 1)
+        Ybits = Y.sum(axis=1).reshape(Y.shape[0], 1)
+        XYbits = X.dot(Y.T).todense()
+    else:
+        Xbits = X.sum(axis=1, keepdims=True)
+        Ybits = Y.sum(axis=1, keepdims=True)
+        XYbits = X.dot(Y.T)
     with np.errstate(divide='ignore'):  # handle 0 in denominator
         return np.asarray(np.nan_to_num(XYbits / (Xbits + Ybits.T - XYbits)),
                           dtype=np.float64)
