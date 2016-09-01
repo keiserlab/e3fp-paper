@@ -4,6 +4,7 @@ Author: Seth Axen
 E-mail: seth.axen@gmail.com
 """
 import os
+import glob
 import logging
 import sys
 import math
@@ -185,7 +186,7 @@ class SKLearnCVMethodBase(CVMethod):
 
     def is_trained(self):
         return (os.path.isdir(self.fit_dir) and
-                len(os.listdir(self.fit_dir)) > 0)
+                len(glob.glob(os.path.join(self.fit_dir, "*"))) > 0)
 
     def save_fit_file(self, target_key, clf):
         """Save target fit to file."""
@@ -325,7 +326,7 @@ class SKLearnCVMethodBase(CVMethod):
             test_mol_lists_dict)
 
         logging.info("Fetching target fits.")
-        fit_files = os.listdir(self.fit_dir)
+        fit_files = glob.glob(os.path.join(self.fit_dir, "*"))
 
         logging.info("Searching molecules against targets.")
         results = {mol_name: {} for mol_name
