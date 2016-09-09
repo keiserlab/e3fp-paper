@@ -375,9 +375,9 @@ class SVMCVMethod(SKLearnCVMethodBase):
         """
         return clf.decision_function(data)
 
-    def test(self, *args):
+    def test(self, test_mol_lists_dict, batch=False):
         # batch kernel calculations use a lot of memory
-        super(SVMCVMethod, self).test(*args, batch=False)
+        return super(SVMCVMethod, self).test(test_mol_lists_dict, batch=batch)
 
 
 class RandomForestCVMethod(SKLearnCVMethodBase):
