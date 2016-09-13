@@ -253,11 +253,11 @@ class SKLearnCVMethodBase(CVMethod):
                                            native_tuples), row_inds)])
             all_col_inds.extend(itertools.chain(*col_inds))
             all_row_inds.extend(itertools.chain(*row_inds))
-        # csr matrix as np.float32 for quick classification
+        # csr matrix as np.float64 for quick classification
         all_fps = coo_matrix(([True] * len(all_row_inds),
                               (all_row_inds, all_col_inds)),
                              shape=(fp_num, bit_num),
-                             dtype=np.float32).tocsr()
+                             dtype=np.float64).tocsr()
         del mol_list_dict, all_col_inds, all_row_inds
         return all_fps, mol_indices_dict
 
