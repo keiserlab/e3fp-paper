@@ -13,11 +13,13 @@ import cPickle as pkl
 
 import numpy as np
 import scipy as sc
+from scipy.sparse import issparse, coo_matrix, csr_matrix
 from sklearn import svm
+from sklearn.metrics.pairwise import check_pairwise_arrays
+from sklearn.utils.extmath import safe_sparse_dot
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.naive_bayes import BernoulliNB
 from sklearn.externals import joblib
-
 from python_utilities.io_tools import smart_open, touch_dir
 from e3fp_paper.sea_utils.util import molecules_to_lists_dicts, \
                                       targets_to_dict, \
@@ -252,10 +254,10 @@ class SKLearnCVMethodBase(CVMethod):
             all_col_inds.extend(itertools.chain(*col_inds))
             all_row_inds.extend(itertools.chain(*row_inds))
         # csr matrix as np.float32 for quick classification
-        all_fps = sc.sparse.coo_matrix(([True] * len(all_row_inds),
-                                        (all_row_inds, all_col_inds)),
-                                       shape=(fp_num, bit_num),
-                                       dtype=np.float32).tocsr()
+        all_fps = coo_matrix(([True] * len(all_row_inds),
+                              (all_row_inds, all_col_inds)),
+                             shape=(fp_num, bit_num),
+                             dtype=np.float32).tocsr()
         del mol_list_dict, all_col_inds, all_row_inds
         return all_fps, mol_indices_dict
 
@@ -401,22 +403,21 @@ class NaiveBayesCVMethod(SKLearnCVMethodBase):
         return BernoulliNB(alpha=1.0, fit_prior=True)
 
 
-def tanimoto_kernel(X, Y):
-    """Tanimoto kernel for use in kernel methods.
+def tanimoto_kernel(X, Y=None):
+    """Compute the Tanimoto kernel between X and Y.
 
     Data must be binary. This is not checked.
 
     Parameters
     ----------
-    X : ndarray or csr_matrix of np.float64
-        MxP bitvector array for M mols and P bits
-    Y : np.array or csr_matrix of np.float64
-        NxP bitvector array for N mols and P bits
+    X : array_like, sparse matrix
+        with shape (n_samples_X, n_features).
+    Y : array_like, sparse matrix (optional)
+        with shape (n_samples_Y, n_features).
 
     Returns
-    ----------
-    ndarray of np.float64
-        Tanimoto similarity between X and Y fingerprints
+    -------
+    similarity_matrix : array of shape (n_samples_X, n_samples_Y)
 
     References
     ----------
@@ -424,14 +425,12 @@ def tanimoto_kernel(X, Y):
           chemical informatics." Neural Networks. 2005. 18(8): 1093-1110.
           doi: 10.1.1.92.483
     """
-    if sc.sparse.issparse(X):
-        Xbits = X.sum(axis=1).reshape(X.shape[0], 1)
-        Ybits = Y.sum(axis=1).reshape(Y.shape[0], 1)
-        XYbits = X.dot(Y.T).todense()
-    else:
-        Xbits = X.sum(axis=1, keepdims=True)
-        Ybits = Y.sum(axis=1, keepdims=True)
-        XYbits = X.dot(Y.T)
+    X, Y = check_pairwise_arrays(X, Y)
+    if issparse(X) or issparse(Y):  # ensure if one is sparse, all are sparse.
+        X = csr_matrix(X, copy=False)
+        Y = csr_matrix(Y, copy=False)
+    Xbits = np.sum(X, axis=1, keepdims=True)
+    Ybits = np.sum(Y, axis=1, keepdims=True)
+    XYbits = safe_sparse_dot(X, Y.T, dense_output=True)
     with np.errstate(divide='ignore'):  # handle 0 in denominator
-        return np.asarray(np.nan_to_num(XYbits / (Xbits + Ybits.T - XYbits)),
-                          dtype=np.float64)
+        return np.asarray(np.nan_to_num(XYbits / (Xbits + Ybits.T - XYbits)))
