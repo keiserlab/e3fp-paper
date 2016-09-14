@@ -241,32 +241,38 @@ class SKLearnCVMethodBase(CVMethod):
                                                fp_num + mol_fp_num)
             fp_num += mol_fp_num
 
-        logging.info("Populating sparse matrix with fingerprints.")
         bit_num = native_tuple_to_fprint(
             next(mol_list_dict.itervalues())[0]).bits
-        all_col_inds = []
-        all_row_inds = []
-        for mol_name, native_tuples in mol_list_dict.iteritems():
-            row_inds = mol_indices_dict[mol_name]
-            col_inds, row_inds = zip(*[(list(fp.indices),
-                                        [r] * fp.bit_count)
-                                       for fp, r in zip(map(
-                                           native_tuple_to_fprint,
-                                           native_tuples), row_inds)])
-            all_col_inds.extend(itertools.chain(*col_inds))
-            all_row_inds.extend(itertools.chain(*row_inds))
         if dense:
-            all_fps = coo_matrix(([True] * len(all_row_inds),
-                                  (all_row_inds, all_col_inds)),
-                                 shape=(fp_num, bit_num),
-                                 dtype=np.float64).toarray()
+            logging.info("Populating array with fingerprints.")
+            all_fps = np.empty((fp_num, bit_num), dtype=np.float64)
+            for mol_name, native_tuples in mol_list_dict.iteritems():
+                row_inds = mol_indices_dict[mol_name]
+                all_fps[row_inds, :] = [
+                    native_tuple_to_fprint(n).to_bitvector()
+                    for n in native_tuples]
         else:
+            logging.info("Populating sparse matrix with fingerprints.")
+            all_col_inds = []
+            all_row_inds = []
+            for mol_name, native_tuples in mol_list_dict.iteritems():
+                row_inds = mol_indices_dict[mol_name]
+                col_inds, row_inds = zip(*[(list(fp.indices),
+                                            [r] * fp.bit_count)
+                                           for fp, r in zip(map(
+                                               native_tuple_to_fprint,
+                                               native_tuples), row_inds)])
+                all_col_inds.extend(itertools.chain(*col_inds))
+                all_row_inds.extend(itertools.chain(*row_inds))
+
             # csr matrix as np.float64 for quick classification
             all_fps = coo_matrix(([True] * len(all_row_inds),
                                   (all_row_inds, all_col_inds)),
                                  shape=(fp_num, bit_num),
                                  dtype=np.float64).tocsr()
-        del mol_list_dict, all_col_inds, all_row_inds
+            del all_col_inds, all_row_inds
+
+        del mol_list_dict
         return all_fps, mol_indices_dict
 
     def train(self, molecules_file, targets_file):
