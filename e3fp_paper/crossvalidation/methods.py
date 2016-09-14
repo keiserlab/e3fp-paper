@@ -209,13 +209,15 @@ class SKLearnCVMethodBase(CVMethod):
         return target_key, clf
 
     @staticmethod
-    def molecules_to_array(molecules):
+    def molecules_to_array(molecules, dense=False):
         """Convert molecules to sparse matrix.
 
         Parameters
         ----------
         molecules : dict or string
             Molecules file or mol_list_dict.
+        dense : bool, optional
+            Return dense array.
 
         Returns
         -------
@@ -253,11 +255,17 @@ class SKLearnCVMethodBase(CVMethod):
                                            native_tuples), row_inds)])
             all_col_inds.extend(itertools.chain(*col_inds))
             all_row_inds.extend(itertools.chain(*row_inds))
-        # csr matrix as np.float64 for quick classification
-        all_fps = coo_matrix(([True] * len(all_row_inds),
-                              (all_row_inds, all_col_inds)),
-                             shape=(fp_num, bit_num),
-                             dtype=np.float64).tocsr()
+        if dense:
+            all_fps = coo_matrix(([True] * len(all_row_inds),
+                                  (all_row_inds, all_col_inds)),
+                                 shape=(fp_num, bit_num),
+                                 dtype=np.float64).toarray()
+        else:
+            # csr matrix as np.float64 for quick classification
+            all_fps = coo_matrix(([True] * len(all_row_inds),
+                                  (all_row_inds, all_col_inds)),
+                                 shape=(fp_num, bit_num),
+                                 dtype=np.float64).tocsr()
         del mol_list_dict, all_col_inds, all_row_inds
         return all_fps, mol_indices_dict
 
@@ -275,7 +283,8 @@ class SKLearnCVMethodBase(CVMethod):
             return
 
         logging.info("Loading molecules/targets.")
-        all_fps, mol_indices_dict = self.molecules_to_array(molecules_file)
+        all_fps, mol_indices_dict = self.molecules_to_array(molecules_file,
+                                                            dense=False)
         mol_names_set = set(mol_indices_dict.keys())
 
         targets_dict = mol_lists_targets_to_targets(
@@ -358,6 +367,11 @@ class SVMCVMethod(SKLearnCVMethodBase):
     default_metric = (-np.inf,)  # (max_dist_from_hyperplane_neg,)
 
     @staticmethod
+    def molecules_to_array(molecules, dense=True):
+        return super(SVMCVMethod, SVMCVMethod).molecules_to_array(molecules,
+                                                                  dense=dense)
+
+    @staticmethod
     def create_clf():
         return svm.SVC(kernel=tanimoto_kernel, random_state=RANDOM_STATE)
 
@@ -377,9 +391,9 @@ class SVMCVMethod(SKLearnCVMethodBase):
         """
         return clf.decision_function(data)
 
-    def test(self, test_mol_lists_dict, batch=False):
-        # batch kernel calculations use a lot of memory
-        return super(SVMCVMethod, self).test(test_mol_lists_dict, batch=batch)
+    # def test(self, test_mol_lists_dict, batch=False):
+    #     # batch kernel calculations use a lot of memory
+    #     return super(SVMCVMethod, self).test(test_mol_lists_dict, batch=batch)
 
 
 class RandomForestCVMethod(SKLearnCVMethodBase):
