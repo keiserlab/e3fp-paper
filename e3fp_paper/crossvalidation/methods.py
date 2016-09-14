@@ -210,7 +210,7 @@ class SKLearnCVMethodBase(CVMethod):
 
     @staticmethod
     def molecules_to_array(molecules, dense=False):
-        """Convert molecules to sparse matrix.
+        """Convert molecules to array or sparse mastrix.
 
         Parameters
         ----------
@@ -221,10 +221,10 @@ class SKLearnCVMethodBase(CVMethod):
 
         Returns
         -------
-        csr_matrix
-            Row-based sparse matrix containing fingerprints
+        csr_matrix or ndarray
+            Row-based sparse matrix or ndarray containing fingerprints.
         dict
-            Map from mol_name to list of row indices in sparse matrix.
+            Map from mol_name to list of row indices of fingerprints.
         """
         if isinstance(molecules, dict):
             mol_list_dict = molecules
