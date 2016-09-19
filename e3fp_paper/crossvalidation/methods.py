@@ -230,6 +230,7 @@ class ClassifierCVMethodBase(CVMethod):
 
         logging.info("Loading molecules/targets.")
         all_fps, mol_indices_dict = molecules_to_array(molecules_file,
+                                                       dtype=self.dtype,
                                                        dense=self.dense_data)
         mol_names_set = set(mol_indices_dict.keys())
 
@@ -281,7 +282,7 @@ class ClassifierCVMethodBase(CVMethod):
         """
         logging.info("Loading test molecules.")
         test_fps, test_mol_indices_dict = molecules_to_array(
-            test_mol_lists_dict, dense=self.dense_data)
+            test_mol_lists_dict, dtype=self.dtype, dense=self.dense_data)
 
         logging.info("Fetching target fits.")
         fit_files = glob.glob(os.path.join(self.fit_dir, "*"))
@@ -306,6 +307,7 @@ class ClassifierCVMethodBase(CVMethod):
                     results[mol_name][target_key] = (max_score,)
         return results
 
+
 def molecules_to_array(molecules, dtype=np.float64, dense=False):
     """Convert molecules to array or sparse matrix.
 
@@ -313,6 +315,8 @@ def molecules_to_array(molecules, dtype=np.float64, dense=False):
     ----------
     molecules : dict or string
         Molecules file or mol_list_dict.
+    dtype : type, optional
+        Numpy data type.
     dense : bool, optional
         Return dense array.
 
