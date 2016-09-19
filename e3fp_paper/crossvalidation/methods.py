@@ -19,6 +19,9 @@ from sklearn.utils.extmath import safe_sparse_dot
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.naive_bayes import BernoulliNB
 from sklearn.externals import joblib
+from lasagne.layers import InputLayer, DenseLayer, DropoutLayer
+from lasagne.nonlinearities import leaky_rectify, softmax
+from nolearn.lasagne import NeuralNet, BatchIterator
 from python_utilities.io_tools import smart_open, touch_dir
 from e3fp_paper.sea_utils.util import molecules_to_lists_dicts, \
                                       targets_to_dict, \
@@ -318,7 +321,6 @@ def molecules_to_array(molecules, dtype=np.float64, dense=False):
     else:
         _, mol_list_dict, _ = molecules_to_lists_dicts(molecules)
 
-    logging.info("Initializing sparse matrix.")
     fp_num = 0
     mol_indices_dict = {}
     mol_names = sorted(mol_list_dict)
@@ -432,6 +434,60 @@ class NaiveBayesCVMethod(SKLearnCVMethodBase):
     @staticmethod
     def create_clf(data=None):
         return BernoulliNB(alpha=1.0, fit_prior=True)
+
+
+class NeuralNetCVMethod(ClassifierCVMethodBase):
+
+    """Cross-validation method using a Neural Network."""
+
+    dtype = np.int32
+    dense_data = True
+    target_fits = {}
+
+    @staticmethod
+    def create_clf(data=None):
+        net_params = {"layers": [("input", InputLayer),
+                                 ("inputdrop", DropoutLayer),
+                                 ("hidden", DenseLayer),
+                                 ("hiddendrop", DropoutLayer),
+                                 ("output", DenseLayer)],
+                      "input_shape": (None, 1024),
+                      "inputdrop_p": .25,
+                      "hidden_num_units": 512,
+                      "hidden_nonlinearity": leaky_rectify,
+                      "hiddendrop_p": .1,
+                      "output_num_units": 2,
+                      "output_nonlinearity": softmax,
+                      "update_learning_rate": 0.01,
+                      "max_epochs": 100}
+        clf = NeuralNet(**net_params)
+        if data is not None:
+            batch_size = min(1000, int(.2 * data.shape[0]))
+            clf.batch_iterator_train = BatchIterator(batch_size=batch_size)
+        return clf
+
+    @staticmethod
+    def train_clf(clf, data, result):
+        """Train neural network with data and result."""
+        return clf.fit(data, result)
+
+    @staticmethod
+    def calculate_metric(clf, data):
+        """Compute probabilities of positive for dataset."""
+        return clf.predict_proba(data)[:, 1]
+
+    def save_fit_file(self, target_key, clf):
+        """Save target fit to file."""
+        fit_file = os.path.join(self.fit_dir, target_key.tid + ".pkl")
+        self.target_fits[fit_file] = target_key
+        clf.save_params_to(fit_file)
+
+    def load_fit_file(self, fit_file):
+        """Load target fit from file."""
+        target_key = self.target_fits[fit_file]
+        clf = self.create_clf()
+        clf.load_params_from(fit_file)
+        return target_key, clf
 
 
 def tanimoto_kernel(X, Y=None):
