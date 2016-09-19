@@ -470,10 +470,9 @@ class BalancedClassIterator(BatchIterator):
 
     """Iterator that re-samples until both classes have equal probabilities.
 
-       Subsample data to correct for class imbalance by sampling according to
-       probabilities that even the odds of both classes. The epoch is defined
-       as the amount of sampled data equal to double the size of the smallest
-       class.
+       Subsample data to correct for class imbalance by sampling. The epoch is
+       defined as the amount of sampled data equal to double the size of the
+       smallest class.
     """
 
     def __init__(self, *args, **kwargs):
@@ -484,21 +483,15 @@ class BalancedClassIterator(BatchIterator):
 
     def __call__(self, X, y=None):
         if y is not None:
-            if self.weights is None:
-                pos_count = float(np.sum(y))  # assume binary
-                neg_count = y.shape[0] - pos_count
-                neg_p = pos_count / neg_count  # set pos_p to 1.
-                self.weights = [neg_p, 1.]  # no need to normalize
-                self.min_count = int(min(pos_count, neg_count))
-            ylen = len(y)
-            p = np.zeros(ylen, dtype=np.float32)
             neg_inds = y == 0
-            p[neg_inds] = self.weights[0]
-            p[~neg_inds] = self.weights[1]
-            np.true_divide(p, p.sum(), p)
-            rand_inds = np.random.choice(np.arange(ylen),
-                                         size=2 * self.min_count,
-                                         replace=True, p=p)
+            pos_inds = list(np.where(~neg_inds)[0])
+            neg_inds = list(np.where(neg_inds)[0])
+            min_count = min(len(neg_inds), len(pos_inds))
+            pos_inds = list(np.random.choice(pos_inds, size=min_count,
+                                             replace=True))
+            neg_inds = list(np.random.choice(neg_inds, size=min_count,
+                                             replace=True))
+            rand_inds = pos_inds + neg_inds
             X, y = X[rand_inds], y[rand_inds]
         return super(BalancedClassIterator, self).__call__(X, y)
 
