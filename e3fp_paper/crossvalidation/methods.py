@@ -10,6 +10,7 @@ import sys
 import math
 import itertools
 import cPickle as pkl
+import shelve
 
 import numpy as np
 from scipy.sparse import issparse, coo_matrix, csr_matrix
@@ -506,7 +507,11 @@ class NeuralNetCVMethod(ClassifierCVMethodBase):
 
     dtype = np.int32
     dense_data = True
-    target_fits = {}
+
+    def __init__(self, *args, **kwargs):
+        super(NeuralNetCVMethod, self).__init__(*args, **kwargs)
+        self.target_fits = shelve.open(os.path.join(self.fit_dir,
+                                                    'target_files_key.db'))
 
     @staticmethod
     def create_clf(data=None):
@@ -560,8 +565,8 @@ class NeuralNetCVMethod(ClassifierCVMethodBase):
         return target_key, clf
 
     def train(self, molecules_file, targets_file, sample=False):
-        super(NeuralNetCVMethod, self).__init__(molecules_file, targets_file,
-                                                sample=sample)
+        super(NeuralNetCVMethod, self).train(molecules_file, targets_file,
+                                             sample=sample)
 
 
 def tanimoto_kernel(X, Y=None):
