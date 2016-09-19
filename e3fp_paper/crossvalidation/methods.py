@@ -256,7 +256,7 @@ class ClassifierCVMethodBase(CVMethod):
             logging.debug("Fitting {} using {} fprints ({}/{})".format(
                 target_key.tid, data.shape[0], i + 1, target_num))
             self.train_clf(clf, data, pos)
-            score = self.score_clf(data, pos)
+            score = self.score_clf(clf, data, pos)
             logging.debug("Fitted {} with score {:.4f}. ({}/{})".format(
                 target_key.tid, score, i + 1, target_num))
             self.save_fit_file(target_key, clf)
