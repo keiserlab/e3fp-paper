@@ -477,21 +477,26 @@ class BalancedClassIterator(BatchIterator):
 
     def __init__(self, *args, **kwargs):
         kwargs["shuffle"] = False
-        self.weights = None
+        self.pos_inds = None
+        self.neg_inds = None
         self.min_count = 0
         super(BalancedClassIterator, self).__init__(*args, **kwargs)
 
     def __call__(self, X, y=None):
         if y is not None:
-            neg_inds = y == 0
-            pos_inds = list(np.where(~neg_inds)[0])
-            neg_inds = list(np.where(neg_inds)[0])
-            min_count = min(len(neg_inds), len(pos_inds))
-            pos_inds = list(np.random.choice(pos_inds, size=min_count,
-                                             replace=True))
-            neg_inds = list(np.random.choice(neg_inds, size=min_count,
-                                             replace=True))
-            rand_inds = pos_inds + neg_inds
+            if self.pos_inds is None or self.neg_inds is None:
+                neg_inds = y == 0
+                self.pos_inds = np.where(~neg_inds)[0]
+                self.neg_inds = np.where(neg_inds)[0]
+                self.min_count = min(self.neg_inds.shape[0],
+                                     self.pos_inds.shape[0])
+            pos_inds = np.random.choice(self.pos_inds,
+                                        size=self.min_count,
+                                        replace=True)
+            neg_inds = np.random.choice(self.neg_inds,
+                                        size=self.min_count,
+                                        replace=True)
+            rand_inds = np.concat((pos_inds, neg_inds))
             X, y = X[rand_inds], y[rand_inds]
         return super(BalancedClassIterator, self).__call__(X, y)
 
@@ -527,8 +532,11 @@ class NeuralNetCVMethod(ClassifierCVMethodBase):
         clf = NeuralNet(**net_params)
         if data is not None:
             batch_size = min(1000, int(.2 * data.shape[0]))
-            clf.batch_iterator_train = BalancedClassIterator(
+            batch_iterator = BalancedClassIterator(
                 batch_size=batch_size)
+            clf.batch_iterator_train = batch_iterator
+            clf.batch_iterator_test = batch_iterator
+
         return clf
 
     @staticmethod
