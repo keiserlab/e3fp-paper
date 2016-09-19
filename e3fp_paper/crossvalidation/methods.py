@@ -496,7 +496,7 @@ class BalancedClassIterator(BatchIterator):
             neg_inds = np.random.choice(self.neg_inds,
                                         size=self.min_count,
                                         replace=True)
-            rand_inds = np.concat((pos_inds, neg_inds))
+            rand_inds = np.concatenate((pos_inds, neg_inds))
             X, y = X[rand_inds], y[rand_inds]
         return super(BalancedClassIterator, self).__call__(X, y)
 
