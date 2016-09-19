@@ -264,6 +264,7 @@ class ClassifierCVMethodBase(CVMethod):
                 pos_mol_names = set(set_value.cids)
                 pos[[y for x in pos_mol_names
                      for y in mol_indices_dict[x]]] = 1
+                data = all_fps
             clf = self.create_clf(data)
             logging.debug("Fitting {} using {} fprints ({}/{})".format(
                 target_key.tid, data.shape[0], i + 1, target_num))
