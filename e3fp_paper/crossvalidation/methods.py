@@ -12,7 +12,6 @@ import itertools
 import cPickle as pkl
 
 import numpy as np
-import scipy as sc
 from scipy.sparse import issparse, coo_matrix, csr_matrix
 from sklearn import svm
 from sklearn.metrics.pairwise import check_pairwise_arrays
@@ -157,34 +156,33 @@ class SEASearchCVMethod(CVMethod):
         return -math.log10(pvalue)
 
 
-class SKLearnCVMethodBase(CVMethod):
+class ClassifierCVMethodBase(CVMethod):
 
-    """Base class for using scikit-learn based classifiers."""
+    """Base class for defining classifier methods."""
 
     default_metric = (0.0,)  # (prob,)
+    dtype = np.float64
+    dense_data = False
 
     def __init__(self, out_dir="", overwrite=False):
-        super(SKLearnCVMethodBase, self).__init__(out_dir=out_dir,
-                                                  overwrite=overwrite)
+        super(ClassifierCVMethodBase, self).__init__(out_dir=out_dir,
+                                                     overwrite=overwrite)
         self.fit_dir = os.path.join(self.out_dir, "target_fits")
 
     @staticmethod
-    def create_clf():
+    def create_clf(data=None):
         """Initialize new classifier."""
         raise NotImplementedError
 
     @staticmethod
-    def calculate_metric(clf, data):
-        """Compute probabilities of positive for dataset.
+    def train_clf(clf, data, result):
+        """Train classifier with data and result."""
+        raise NotImplementedError
 
-        Parameters
-        ----------
-        clf : sklearn estimator
-            Classifier
-        data : ndarray or sparse matrix
-            NxM array with N data points and M features.
-        """
-        return clf.predict_proba(data)[:, 1]
+    @staticmethod
+    def calculate_metric(clf, data):
+        """Compute probabilities of positive for dataset."""
+        raise NotImplementedError
 
     def is_trained(self):
         return (os.path.isdir(self.fit_dir) and
@@ -198,6 +196,7 @@ class SKLearnCVMethodBase(CVMethod):
         except OverflowError:  # zlib bug in Python 2.7
             with smart_open(fit_file, "w") as f:
                 pkl.dump((target_key, clf), f)
+        return fit_file
 
     def load_fit_file(self, fit_file):
         """Load target fit from file."""
@@ -207,73 +206,6 @@ class SKLearnCVMethodBase(CVMethod):
             with smart_open(fit_file, "r") as f:
                 target_key, clf = pkl.load(f)
         return target_key, clf
-
-    @staticmethod
-    def molecules_to_array(molecules, dense=False):
-        """Convert molecules to array or sparse mastrix.
-
-        Parameters
-        ----------
-        molecules : dict or string
-            Molecules file or mol_list_dict.
-        dense : bool, optional
-            Return dense array.
-
-        Returns
-        -------
-        csr_matrix or ndarray
-            Row-based sparse matrix or ndarray containing fingerprints.
-        dict
-            Map from mol_name to list of row indices of fingerprints.
-        """
-        if isinstance(molecules, dict):
-            mol_list_dict = molecules
-        else:
-            _, mol_list_dict, _ = molecules_to_lists_dicts(molecules)
-
-        logging.info("Initializing sparse matrix.")
-        fp_num = 0
-        mol_indices_dict = {}
-        mol_names = sorted(mol_list_dict)
-        for mol_name in mol_names:
-            mol_fp_num = len(mol_list_dict[mol_name])
-            mol_indices_dict[mol_name] = range(fp_num,
-                                               fp_num + mol_fp_num)
-            fp_num += mol_fp_num
-
-        bit_num = native_tuple_to_fprint(
-            next(mol_list_dict.itervalues())[0]).bits
-        if dense:
-            logging.info("Populating array with fingerprints.")
-            all_fps = np.empty((fp_num, bit_num), dtype=np.float64)
-            for mol_name, native_tuples in mol_list_dict.iteritems():
-                row_inds = mol_indices_dict[mol_name]
-                all_fps[row_inds, :] = [
-                    native_tuple_to_fprint(n).to_bitvector()
-                    for n in native_tuples]
-        else:
-            logging.info("Populating sparse matrix with fingerprints.")
-            all_col_inds = []
-            all_row_inds = []
-            for mol_name, native_tuples in mol_list_dict.iteritems():
-                row_inds = mol_indices_dict[mol_name]
-                col_inds, row_inds = zip(*[(list(fp.indices),
-                                            [r] * fp.bit_count)
-                                           for fp, r in zip(map(
-                                               native_tuple_to_fprint,
-                                               native_tuples), row_inds)])
-                all_col_inds.extend(itertools.chain(*col_inds))
-                all_row_inds.extend(itertools.chain(*row_inds))
-
-            # csr matrix as np.float64 for quick classification
-            all_fps = coo_matrix(([True] * len(all_row_inds),
-                                  (all_row_inds, all_col_inds)),
-                                 shape=(fp_num, bit_num),
-                                 dtype=np.float64).tocsr()
-            del all_col_inds, all_row_inds
-
-        del mol_list_dict
-        return all_fps, mol_indices_dict
 
     def train(self, molecules_file, targets_file):
         """Train and store a classifier for each target.
@@ -289,8 +221,8 @@ class SKLearnCVMethodBase(CVMethod):
             return
 
         logging.info("Loading molecules/targets.")
-        all_fps, mol_indices_dict = self.molecules_to_array(molecules_file,
-                                                            dense=False)
+        all_fps, mol_indices_dict = molecules_to_array(molecules_file,
+                                                       dense=self.dense_data)
         mol_names_set = set(mol_indices_dict.keys())
 
         targets_dict = mol_lists_targets_to_targets(
@@ -310,13 +242,12 @@ class SKLearnCVMethodBase(CVMethod):
                                  [(y, False) for x in neg_mol_names
                                   for y in mol_indices_dict[x]]))
             data = all_fps[fp_inds, :]
-            clf = self.create_clf()
+            clf = self.create_clf(data)
             logging.debug("Fitting {} using {} fprints ({}/{})".format(
                 target_key.tid, data.shape[0], i + 1, target_num))
-            clf.fit(data, pos)
-            score = clf.score(data, pos)
-            logging.debug("Fitted {} with score {:.4f} ({}/{})".format(
-                target_key.tid, score, i + 1, target_num))
+            self.train_clf(clf, data, pos)
+            logging.debug("Fitted {}. ({}/{})".format(
+                target_key.tid, i + 1, target_num))
             self.save_fit_file(target_key, clf)
             if (i + 1) % target_perc_num == 0:
                 logging.info("Fit {:.2f}% of targets ({}/{})".format(
@@ -339,8 +270,8 @@ class SKLearnCVMethodBase(CVMethod):
             where metric1 is the metric used to construct ROC curve.
         """
         logging.info("Loading test molecules.")
-        test_fps, test_mol_indices_dict = self.molecules_to_array(
-            test_mol_lists_dict)
+        test_fps, test_mol_indices_dict = molecules_to_array(
+            test_mol_lists_dict, dense=self.dense_data)
 
         logging.info("Fetching target fits.")
         fit_files = glob.glob(os.path.join(self.fit_dir, "*"))
@@ -365,20 +296,104 @@ class SKLearnCVMethodBase(CVMethod):
                     results[mol_name][target_key] = (max_score,)
         return results
 
+def molecules_to_array(molecules, dtype=np.float64, dense=False):
+    """Convert molecules to array or sparse matrix.
+
+    Parameters
+    ----------
+    molecules : dict or string
+        Molecules file or mol_list_dict.
+    dense : bool, optional
+        Return dense array.
+
+    Returns
+    -------
+    csr_matrix or ndarray
+        Row-based sparse matrix or ndarray containing fingerprints.
+    dict
+        Map from mol_name to list of row indices of fingerprints.
+    """
+    if isinstance(molecules, dict):
+        mol_list_dict = molecules
+    else:
+        _, mol_list_dict, _ = molecules_to_lists_dicts(molecules)
+
+    logging.info("Initializing sparse matrix.")
+    fp_num = 0
+    mol_indices_dict = {}
+    mol_names = sorted(mol_list_dict)
+    for mol_name in mol_names:
+        mol_fp_num = len(mol_list_dict[mol_name])
+        mol_indices_dict[mol_name] = range(fp_num,
+                                           fp_num + mol_fp_num)
+        fp_num += mol_fp_num
+
+    bit_num = native_tuple_to_fprint(
+        next(mol_list_dict.itervalues())[0]).bits
+    if dense:
+        logging.info("Populating array with fingerprints.")
+        all_fps = np.empty((fp_num, bit_num), dtype=dtype)
+        for mol_name, native_tuples in mol_list_dict.iteritems():
+            row_inds = mol_indices_dict[mol_name]
+            all_fps[row_inds, :] = [
+                native_tuple_to_fprint(n).to_bitvector()
+                for n in native_tuples]
+    else:
+        logging.info("Populating sparse matrix with fingerprints.")
+        all_col_inds = []
+        all_row_inds = []
+        for mol_name, native_tuples in mol_list_dict.iteritems():
+            row_inds = mol_indices_dict[mol_name]
+            col_inds, row_inds = zip(*[(list(fp.indices),
+                                        [r] * fp.bit_count)
+                                       for fp, r in zip(map(
+                                           native_tuple_to_fprint,
+                                           native_tuples), row_inds)])
+            all_col_inds.extend(itertools.chain(*col_inds))
+            all_row_inds.extend(itertools.chain(*row_inds))
+
+        all_fps = coo_matrix(([True] * len(all_row_inds),
+                              (all_row_inds, all_col_inds)),
+                             shape=(fp_num, bit_num),
+                             dtype=dtype).tocsr()
+        del all_col_inds, all_row_inds
+
+    del mol_list_dict
+    return all_fps, mol_indices_dict
+
+
+class SKLearnCVMethodBase(ClassifierCVMethodBase):
+
+    """Base class for using scikit-learn based classifiers."""
+
+    @staticmethod
+    def train_clf(clf, data, result):
+        """Train classifier with data and result."""
+        clf.fit(data, result)
+
+    @staticmethod
+    def calculate_metric(clf, data):
+        """Compute probabilities of positive for dataset.
+
+        Parameters
+        ----------
+        clf : sklearn estimator
+            Classifier
+        data : ndarray or sparse matrix
+            NxM array with N data points and M features.
+        """
+        return clf.predict_proba(data)[:, 1]
+
 
 class SVMCVMethod(SKLearnCVMethodBase):
 
     """Cross-validation method using a Support Vector Machine."""
 
     default_metric = (-np.inf,)  # (max_dist_from_hyperplane_neg,)
+    dense_data = True
 
     @staticmethod
-    def molecules_to_array(molecules, dense=True):
-        return super(SVMCVMethod, SVMCVMethod).molecules_to_array(molecules,
-                                                                  dense=dense)
-
-    @staticmethod
-    def create_clf():
+    def create_clf(data=None):
         return svm.SVC(kernel=tanimoto_kernel, random_state=RANDOM_STATE)
 
     @staticmethod
@@ -397,17 +412,13 @@ class SVMCVMethod(SKLearnCVMethodBase):
         """
         return clf.decision_function(data)
 
-    # def test(self, test_mol_lists_dict, batch=False):
-    #     # batch kernel calculations use a lot of memory
-    #     return super(SVMCVMethod, self).test(test_mol_lists_dict, batch=batch)
-
 
 class RandomForestCVMethod(SKLearnCVMethodBase):
 
     """Cross-validation method using a Random Forest."""
 
     @staticmethod
-    def create_clf():
+    def create_clf(data=None):
         return RandomForestClassifier(n_estimators=100, max_depth=2,
                                       min_samples_split=2, n_jobs=-1,
                                       random_state=RANDOM_STATE,
@@ -419,7 +430,7 @@ class NaiveBayesCVMethod(SKLearnCVMethodBase):
     """Cross-validation method using a Naive Bayesian Classifier."""
 
     @staticmethod
-    def create_clf():
+    def create_clf(data=None):
         return BernoulliNB(alpha=1.0, fit_prior=True)
 
 
