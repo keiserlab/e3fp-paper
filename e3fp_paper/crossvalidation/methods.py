@@ -215,7 +215,7 @@ class ClassifierCVMethodBase(CVMethod):
                 target_key, clf = pkl.load(f)
         return target_key, clf
 
-    def train(self, molecules_file, targets_file):
+    def train(self, molecules_file, targets_file, sample=True):
         """Train and store a classifier for each target.
 
         Parameters
@@ -227,6 +227,11 @@ class ClassifierCVMethodBase(CVMethod):
         """
         if self.is_trained() and not self.overwrite:
             return
+
+        if not sample:
+            logging.warning("Sample option set to off. All negative and "
+                            "positive data will be used for training. This "
+                            "is dangerous if classes are imbalanced.")
 
         logging.info("Loading molecules/targets.")
         all_fps, mol_indices_dict = molecules_to_array(molecules_file,
@@ -242,16 +247,22 @@ class ClassifierCVMethodBase(CVMethod):
         target_num = len(targets_dict)
         target_perc_num = int(target_num / 100)
         for i, (target_key, set_value) in enumerate(targets_dict.iteritems()):
-            pos_mol_names = set(set_value.cids)
-            neg_mol_names = set(np.random.choice(
-                list(mol_names_set - pos_mol_names), len(pos_mol_names),
-                replace=False))
-            fp_inds, pos = zip(*([(y, True) for x in pos_mol_names
-                                  for y in mol_indices_dict[x]] +
-                                 [(y, False) for x in neg_mol_names
-                                  for y in mol_indices_dict[x]]))
-            pos = np.asarray(pos, dtype=self.dtype)
-            data = all_fps[fp_inds, :]
+            if sample:
+                pos_mol_names = set(set_value.cids)
+                neg_mol_names = set(np.random.choice(
+                    list(mol_names_set - pos_mol_names), len(pos_mol_names),
+                    replace=False))
+                fp_inds, pos = zip(*([(y, True) for x in pos_mol_names
+                                      for y in mol_indices_dict[x]] +
+                                     [(y, False) for x in neg_mol_names
+                                      for y in mol_indices_dict[x]]))
+                pos = np.asarray(pos, dtype=self.dtype)
+                data = all_fps[fp_inds, :]
+            else:
+                pos = np.zeros(all_fps.shape[0], dtype=self.dtype)
+                pos_mol_names = set(set_value.cids)
+                pos[[y for x in pos_mol_names
+                     for y in mol_indices_dict[x]]] = 1
             clf = self.create_clf(data)
             logging.debug("Fitting {} using {} fprints ({}/{})".format(
                 target_key.tid, data.shape[0], i + 1, target_num))
