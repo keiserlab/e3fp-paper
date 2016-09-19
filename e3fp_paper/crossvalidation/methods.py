@@ -183,6 +183,11 @@ class ClassifierCVMethodBase(CVMethod):
         raise NotImplementedError
 
     @staticmethod
+    def score_clf(clf, data, result):
+        """Score trained classifier."""
+        raise NotImplementedError
+
+    @staticmethod
     def calculate_metric(clf, data):
         """Compute probabilities of positive for dataset."""
         raise NotImplementedError
@@ -250,8 +255,9 @@ class ClassifierCVMethodBase(CVMethod):
             logging.debug("Fitting {} using {} fprints ({}/{})".format(
                 target_key.tid, data.shape[0], i + 1, target_num))
             self.train_clf(clf, data, pos)
-            logging.debug("Fitted {}. ({}/{})".format(
-                target_key.tid, i + 1, target_num))
+            score = self.score_clf(data, pos)
+            logging.debug("Fitted {} with score {:.4f}. ({}/{})".format(
+                target_key.tid, score, i + 1, target_num))
             self.save_fit_file(target_key, clf)
             if (i + 1) % target_perc_num == 0:
                 logging.info("Fit {:.2f}% of targets ({}/{})".format(
@@ -375,6 +381,11 @@ class SKLearnCVMethodBase(ClassifierCVMethodBase):
         clf.fit(data, result)
 
     @staticmethod
+    def score_clf(clf, data, result):
+        """Score trained classifier."""
+        return clf.score(data, result)
+
+    @staticmethod
     def calculate_metric(clf, data):
         """Compute probabilities of positive for dataset.
 
@@ -471,6 +482,11 @@ class NeuralNetCVMethod(ClassifierCVMethodBase):
     def train_clf(clf, data, result):
         """Train neural network with data and result."""
         return clf.fit(data, result)
+
+    @staticmethod
+    def score_clf(clf, data, result):
+        """Score trained neural network."""
+        return clf.score(data, result)
 
     @staticmethod
     def calculate_metric(clf, data):
