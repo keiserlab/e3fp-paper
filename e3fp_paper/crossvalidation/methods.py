@@ -510,7 +510,7 @@ class NeuralNetCVMethod(ClassifierCVMethodBase):
 
     def __init__(self, *args, **kwargs):
         super(NeuralNetCVMethod, self).__init__(*args, **kwargs)
-        self.target_fits = shelve.open(os.path.join(self.fit_dir,
+        self.target_fits = shelve.open(os.path.join(self.out_dir,
                                                     'target_files_key.db'))
 
     @staticmethod
