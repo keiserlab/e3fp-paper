@@ -532,10 +532,10 @@ class NeuralNetCVMethod(ClassifierCVMethodBase):
         clf = NeuralNet(**net_params)
         if data is not None:
             batch_size = min(1000, int(.2 * data.shape[0]))
-            batch_iterator = BalancedClassIterator(
+            clf.batch_iterator_train = BalancedClassIterator(
                 batch_size=batch_size)
-            clf.batch_iterator_train = batch_iterator
-            clf.batch_iterator_test = batch_iterator
+            clf.batch_iterator_test = BalancedClassIterator(
+                batch_size=batch_size)
 
         return clf
 
