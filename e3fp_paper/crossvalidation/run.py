@@ -10,7 +10,7 @@ import logging
 import cPickle as pickle
 
 import numpy as np
-from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_curve, precision_recall_curve
 
 from python_utilities.scripting import setup_logging
 from python_utilities.io_tools import touch_dir, smart_open
@@ -27,6 +27,7 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
                  affinity=10000, split_by="targets", cv_type="targets",
                  targets_name="targets", out_dir=os.getcwd(), overwrite=False,
                  auc_file="aucs.pkl.gz", roc_file="rocs.pkl.gz",
+                 prec_rec_file="prec_rec.pkl.gz",
                  metrics_labels_file="metrics_labels.pkl.gz",
                  combined_roc_file=False, cv_method_class=SEASearchCVMethod,
                  parallelizer=None):
@@ -67,6 +68,8 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
         Filename to which to write AUCs dict.
     roc_file : str, optional
         Filename to which to write ROCs dict.
+    prec_rec_file : str, optional
+        File where precision recall curve should be saved.
     metrics_labels_file : str, optional
         Filename to which to write raw metrics and labels for computing ROCs.
     combined_roc_file : bool, optional
@@ -101,13 +104,15 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
         cv_dir = os.path.dirname(train_targets_file)
         cv_auc_file = os.path.join(cv_dir, auc_file)
         cv_roc_file = os.path.join(cv_dir, roc_file)
+        cv_prec_rec_file = os.path.join(cv_dir, prec_rec_file)
         cv_metrics_labels_file = os.path.join(cv_dir, metrics_labels_file)
         results_file = os.path.join(cv_dir, "results.pkl.gz")
         args_list.append((molecules_file, test_targets_file,
                           test_molecules_file, train_targets_file,
                           train_molecules_file, cv_auc_file, cv_roc_file,
-                          cv_metrics_labels_file, results_file,
-                          cv_method_class, cv_type, msg, overwrite, cv_dir))
+                          cv_prec_rec_file, cv_metrics_labels_file,
+                          results_file, cv_method_class, cv_type, msg,
+                          overwrite, cv_dir))
 
     if parallelizer is not None:
         mean_aucs = np.asarray(
@@ -163,7 +168,7 @@ def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
 
 def run_cv(molecules_file, test_targets_file, test_molecules_file,
            train_targets_file, train_molecules_file, auc_file, roc_file,
-           metrics_labels_file, results_file, cv_method_class,
+           prec_rec_file, metrics_labels_file, results_file, cv_method_class,
            cv_type="targets", msg="", overwrite=False, out_dir=None):
     """Run a single cross-validation on input training/test files.
 
@@ -183,8 +188,8 @@ def run_cv(molecules_file, test_targets_file, test_molecules_file,
         File to which to write AUCs.
     roc_file : str
         File to which to write ROCs.
-    metrics_labels_file : TYPE
-        Filename to which to write raw metrics and labels for computing ROCs.
+    prec_rec_file : str
+        File where precision recall curve should be saved.
     results_file : str
         File to which to write results.
     cv_method_class : Type
@@ -213,17 +218,21 @@ def run_cv(molecules_file, test_targets_file, test_molecules_file,
     cv_method.train(train_molecules_file, train_targets_file)
 
     if (os.path.isfile(auc_file) and os.path.isfile(roc_file) and
-            not overwrite):
+        not overwrite):
         logging.info("Loading CV results from files.{}".format(msg))
         with smart_open(auc_file, "rb") as f:
             aucs_dict = pickle.load(f)
-        with smart_open(roc_file, "rb") as f:
-            fp_tp_rates_dict = pickle.load(f)
+        # with smart_open(roc_file, "rb") as f:
+        #     fp_tp_rates_dict = pickle.load(f)
+        # try:
+        #     x, y = fp_tp_rates.values()[0]
+        # except ValueError:  # old style, no thresholds
+        #     fp_tp_rates = {k: (v, None) for k, v in fp_tp_rates.iteritems()}
     else:
         logging.info(
             "Searching test against training.{}".format(msg))
         (metrics_labels, fp_tp_rates_dict,
-         aucs_dict, results_dict) = cv_files_to_roc_auc(
+         aucs_dict, prec_rec_dict, results_dict) = cv_files_to_roc_auc(
             molecules_file, test_targets_file, test_molecules_file,
             train_targets_file, train_molecules_file, cv_method,
             cv_type=cv_type)
@@ -235,6 +244,10 @@ def run_cv(molecules_file, test_targets_file, test_molecules_file,
         if overwrite or not os.path.isfile(roc_file):
             with smart_open(roc_file, "wb") as f:
                 pickle.dump(fp_tp_rates_dict, f)
+
+        if overwrite or not os.path.isfile(prec_rec_file):
+            with smart_open(prec_rec_file, "wb") as f:
+                pickle.dump(prec_rec_dict, f)
 
         # if overwrite or not os.path.isfile(results_file):
         #     with smart_open(results_file, "wb") as f:
@@ -282,14 +295,17 @@ def cv_files_to_roc_auc(molecules_file, test_targets_file,
         for ROC thresholds. labels is a length N array containing 1 for
         positives and 0 for negatives in the test set.
     fp_tp_rates_dict : dict
-        Dict matching a key to an 2xN array with false positive rates and true
-        positive rates at the same N thresholds. If `cv_type` is 'targets',
-        key is a ``TargetKey``. If `cv_type` is 'molecules', key is a molecule
-        id. The rows of the array, when plotted against each other, form an
-        ROC curve.
+        Dict matching a key to a tuple containing a 2xN array with false
+        positive rates and true positive rates at the same N thresholds and
+        the thresholds. If `cv_type` is 'targets', key is a ``TargetKey``. If
+        `cv_type` is 'molecules', key is a molecule id. The rows of the array,
+        when plotted against each other, form an ROC curve.
     aucs_dict : dict
         Dict matching key (same as in `fp_tp_rates_dict`) to AUC for ROC
         curve.
+    prec_rec_dict : dict
+        Dict matching key to a tuple of precision, recall, and threshold
+        arrays.
     results : dict
         Raw results dict of format
         {mol_name: {target_key: (metric1,...),...},...}.
@@ -300,6 +316,7 @@ def cv_files_to_roc_auc(molecules_file, test_targets_file,
 
     aucs_dict = {}
     fp_tp_rates_dict = {}
+    prec_rec_dict = {}
     metrics_labels = {}
     _, mol_lists_dict, _ = molecules_to_lists_dicts(molecules_file)
     all_molecules = set(mol_lists_dict.keys())
@@ -338,9 +355,13 @@ def cv_files_to_roc_auc(molecules_file, test_targets_file,
             metrics_labels[target_key] = (metrics, true_false)
             fp_tp_rates, thresholds, auc = metrics_to_roc_auc(
                 metrics[0], true_false, name=target_key.tid)
-
-            fp_tp_rates_dict[target_key] = fp_tp_rates
+            fp_tp_rates_dict[target_key] = (fp_tp_rates, thresholds)
             aucs_dict[target_key] = auc
+
+            prec, rec, thresholds = precision_recall_curve(true_false,
+                                                           metrics[0])
+            prec_rec_dict[target_key] = (prec, rec, thresholds)
+
     else:
         logging.info("Calculating ROC curves and AUCs for molecules.")
         mol_to_target_keys_dict = {}
@@ -367,10 +388,14 @@ def cv_files_to_roc_auc(molecules_file, test_targets_file,
             metrics_labels[mol_name] = (metrics, true_false)
             fp_tp_rates, thresholds, auc = metrics_to_roc_auc(
                 metrics[0], true_false, name=mol_name)
-            fp_tp_rates_dict[mol_name] = fp_tp_rates
+            fp_tp_rates_dict[mol_name] = (fp_tp_rates, thresholds)
             aucs_dict[mol_name] = auc
 
-    return metrics_labels, fp_tp_rates_dict, aucs_dict, results
+            prec, rec, thresholds = precision_recall_curve(true_false,
+                                                           metrics[0])
+            prec_rec_dict[target_key] = (prec, rec, thresholds)
+
+    return metrics_labels, fp_tp_rates_dict, aucs_dict, prec_rec_dict, results
 
 
 def metrics_to_roc_auc(metrics, true_false, name=None, order="greater"):
@@ -418,7 +443,8 @@ def metrics_to_roc_auc(metrics, true_false, name=None, order="greater"):
     if order == "less":
         metrics = -metrics
 
-    fpr, tpr, thresholds = roc_curve(true_false, metrics)
+    fpr, tpr, thresholds = roc_curve(true_false, metrics,
+                                     drop_intermediate=True)
     roc_auc = float(get_auc(fpr, tpr))
     fp_tp_rates = np.array([fpr, tpr], dtype=np.double)
 
