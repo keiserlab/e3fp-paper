@@ -244,6 +244,7 @@ class ClassifierCVMethodBase(CVMethod):
                                   for y in mol_indices_dict[x]] +
                                  [(y, False) for x in neg_mol_names
                                   for y in mol_indices_dict[x]]))
+            pos = np.asarray(pos, dtype=self.dtype)
             data = all_fps[fp_inds, :]
             clf = self.create_clf(data)
             logging.debug("Fitting {} using {} fprints ({}/{})".format(
