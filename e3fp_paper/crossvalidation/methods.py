@@ -53,7 +53,7 @@ class CVMethod(object):
         self.out_dir = out_dir
         self.overwrite = overwrite
 
-    def train(self, molecules_file, targets_file):
+    def train(self, molecules_file, targets_file, sample=True):
         """Train the model.
 
         Parameters
