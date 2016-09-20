@@ -146,7 +146,7 @@ class SEASearchCVMethod(CVMethod):
         return results
 
     def is_trained(self):
-        """Library has bin built."""
+        """Library has been built."""
         return (os.path.isfile(self.fit_file) and
                 os.path.isfile(self.library_file))
 
@@ -194,13 +194,21 @@ class ClassifierCVMethodBase(CVMethod):
         """Compute probabilities of positive for dataset."""
         raise NotImplementedError
 
-    def is_trained(self):
-        return (os.path.isdir(self.fit_dir) and
-                len(glob.glob(os.path.join(self.fit_dir, "*"))) > 0)
+    def is_trained(self, target_keys=[]):
+        """Check if target models are trained."""
+        if not os.path.isdir(self.fit_dir):
+            return False
+        for target_key in target_keys:
+            if not os.path.isfile(self._fit_file_from_target_key(target_key)):
+                return False
+        return True
 
     def save_fit_file(self, target_key, clf):
         """Save target fit to file."""
-        fit_file = os.path.join(self.fit_dir, target_key.tid + ".pkl.gz")
+        try:
+            fit_file = self._fit_file_from_target_key(target_key)
+        except:  # assume target_key is a fit file.
+            fit_file = target_key
         try:
             joblib.dump((target_key, clf), fit_file, compress=9)
         except OverflowError:  # zlib bug in Python 2.7
@@ -226,8 +234,16 @@ class ClassifierCVMethodBase(CVMethod):
             SEA format molecules file.
         targets_file : str
             SEA format targets file.
+        sample : bool, optional
+            Sample negatives to match number of positives to correct for class
+            imbalance.
         """
-        if self.is_trained() and not self.overwrite:
+        logging.info("Loading targets for training.")
+        targets_dict = mol_lists_targets_to_targets(
+            targets_to_dict(targets_file))
+
+        if self.is_trained(targets_dict.keys()) and not self.overwrite:
+            logging.info("All targets already trained.")
             return
 
         if not sample:
@@ -235,20 +251,24 @@ class ClassifierCVMethodBase(CVMethod):
                             "positive data will be used for training. This "
                             "is dangerous if classes are imbalanced.")
 
-        logging.info("Loading molecules/targets.")
+        logging.info("Loading molecules for training.")
         all_fps, mol_indices_dict = molecules_to_array(molecules_file,
                                                        dtype=self.dtype,
                                                        dense=self.dense_data)
         mol_names_set = set(mol_indices_dict.keys())
-
-        targets_dict = mol_lists_targets_to_targets(
-            targets_to_dict(targets_file))
 
         logging.info("Generating target fits.")
         touch_dir(self.fit_dir)
         target_num = len(targets_dict)
         target_perc_num = int(target_num / 100)
         for i, (target_key, set_value) in enumerate(targets_dict.iteritems()):
+            fit_file = self._fit_file_from_target_key(target_key)
+            if os.path.isfile(fit_file) and not self.overwrite:
+                logging.debug(
+                    "Fit file for {} already exists. Skipping".format(
+                        target_key.tid))
+                continue
+
             if sample:
                 pos_mol_names = set(set_value.cids)
                 neg_mol_names = set(np.random.choice(
@@ -274,10 +294,14 @@ class ClassifierCVMethodBase(CVMethod):
                 score = self.score_clf(clf, data, pos)
                 logging.debug("Fitted {} with score {:.4f}. ({}/{})".format(
                     target_key.tid, score, i + 1, target_num))
-            self.save_fit_file(target_key, clf)
+            else:
+                logging.debug("Fitted {}. ({}/{})".format(target_key.tid,
+                                                          i + 1, target_num))
+            self.save_fit_file(fit_file, clf)
             if (i + 1) % target_perc_num == 0:
                 logging.info("Fit {:.2f}% of targets ({}/{})".format(
                     100 * (i + 1) / float(target_num), i + 1, target_num))
+        logging.info("Finished fitting targets.")
         del all_fps
 
     def test(self, test_mol_lists_dict, batch=True):
@@ -287,6 +311,9 @@ class ClassifierCVMethodBase(CVMethod):
         ----------
         test_mol_lists_dict : str
             Mol lists dict for test molecules.
+        batch : bool, optional
+            Predict all fingerprints with classifier simultaneously. If False,
+            each molecule will be predicted separately.
 
         Returns
         -------
@@ -321,6 +348,10 @@ class ClassifierCVMethodBase(CVMethod):
                     max_score = float(max(scores))
                     results[mol_name][target_key] = (max_score,)
         return results
+
+    def _fit_file_from_target_key(self, target_key):
+        """Get filename for target."""
+        return os.path.join(self.fit_dir, target_key.tid + ".pkl.gz")
 
 
 def molecules_to_array(molecules, dtype=np.float64, dense=False):
