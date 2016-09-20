@@ -573,6 +573,10 @@ class NeuralNetCVMethod(ClassifierCVMethodBase):
         super(NeuralNetCVMethod, self).train(molecules_file, targets_file,
                                              sample=sample)
 
+    def __del__(self):
+        self.target_fits.close()
+        del self.target_fits
+
 
 def tanimoto_kernel(X, Y=None):
     """Compute the Tanimoto kernel between X and Y.
