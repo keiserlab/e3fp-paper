@@ -37,11 +37,11 @@ def fprint_to_native_tuple(fprint):
     return (native, fprint.name)
 
 
-def native_tuple_to_fprint(native_tuple):
+def native_tuple_to_fprint(native_tuple, bits=None):
     """Convert native tuple to fingerprint."""
     native, name = native_tuple
     bitstring = ascii2string(native)
-    fprint = Fingerprint.from_bitstring(bitstring)
+    fprint = Fingerprint.from_bitstring(bitstring, bits=bits)
     fprint.name = name
     return fprint
 
