@@ -23,6 +23,7 @@ from sklearn.externals import joblib
 from lasagne.layers import InputLayer, DenseLayer, DropoutLayer
 from lasagne.nonlinearities import leaky_rectify, softmax
 from nolearn.lasagne import NeuralNet, BatchIterator
+from nolearn_utils.hooks import EarlyStopping
 from python_utilities.io_tools import smart_open, touch_dir
 from e3fp_paper.sea_utils.util import molecules_to_lists_dicts, \
                                       targets_to_dict, \
@@ -528,7 +529,8 @@ class NeuralNetCVMethod(ClassifierCVMethodBase):
                       "output_num_units": 2,
                       "output_nonlinearity": softmax,
                       "update_learning_rate": 0.01,
-                      "max_epochs": 100}
+                      "max_epochs": 300,
+                      "on_epoch_finished": EarlyStopping(patience=75)}
         clf = NeuralNet(**net_params)
         if data is not None:
             batch_size = min(1000, int(.2 * data.shape[0]))
