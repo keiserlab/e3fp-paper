@@ -13,7 +13,7 @@ import cPickle as pkl
 import shelve
 
 import numpy as np
-from scipy.sparse import issparse, coo_matrix, csr_matrix
+from scipy.sparse import issparse, csr_matrix
 from sklearn import svm
 from sklearn.metrics.pairwise import check_pairwise_arrays
 from sklearn.utils.extmath import safe_sparse_dot
@@ -28,6 +28,7 @@ from python_utilities.io_tools import smart_open, touch_dir
 from e3fp_paper.sea_utils.util import molecules_to_lists_dicts, \
                                       targets_to_dict, \
                                       mol_lists_targets_to_targets
+from e3fp_paper.sea_utils.util import native_tuple_to_indices
 from e3fp_paper.sea_utils.library import build_library
 from e3fp_paper.sea_utils.run import sea_set_search
 from e3fp_paper.pipeline import native_tuple_to_fprint
@@ -373,51 +374,44 @@ def molecules_to_array(molecules, dtype=np.float64, dense=False):
     dict
         Map from mol_name to list of row indices of fingerprints.
     """
+    if dense:
+        logging.info("Populating array with fingerprints.")
+    else:
+        logging.info("Populating sparse matrix with fingerprints.")
+
     if isinstance(molecules, dict):
         mol_list_dict = molecules
     else:
         _, mol_list_dict, _ = molecules_to_lists_dicts(molecules)
 
-    fp_num = 0
-    mol_indices_dict = {}
-    mol_names = sorted(mol_list_dict)
-    for mol_name in mol_names:
-        mol_fp_num = len(mol_list_dict[mol_name])
-        mol_indices_dict[mol_name] = range(fp_num,
-                                           fp_num + mol_fp_num)
-        fp_num += mol_fp_num
-
     bit_num = native_tuple_to_fprint(
         next(mol_list_dict.itervalues())[0]).bits
-    if dense:
-        logging.info("Populating array with fingerprints.")
-        all_fps = np.empty((fp_num, bit_num), dtype=dtype)
-        for mol_name, native_tuples in mol_list_dict.iteritems():
-            row_inds = mol_indices_dict[mol_name]
-            all_fps[row_inds, :] = [
-                native_tuple_to_fprint(n).to_bitvector()
-                for n in native_tuples]
-    else:
-        logging.info("Populating sparse matrix with fingerprints.")
-        all_col_inds = []
-        all_row_inds = []
-        for mol_name, native_tuples in mol_list_dict.iteritems():
-            row_inds = mol_indices_dict[mol_name]
-            col_inds, row_inds = zip(*[(list(fp.indices),
-                                        [r] * fp.bit_count)
-                                       for fp, r in zip(map(
-                                           native_tuple_to_fprint,
-                                           native_tuples), row_inds)])
-            all_col_inds.extend(itertools.chain(*col_inds))
-            all_row_inds.extend(itertools.chain(*row_inds))
-
-        all_fps = coo_matrix(([True] * len(all_row_inds),
-                              (all_row_inds, all_col_inds)),
-                             shape=(fp_num, bit_num),
-                             dtype=dtype).tocsr()
-        del all_col_inds, all_row_inds
-
+    mol_indices_dict = {}
+    all_row_inds = []
+    all_col_inds = []
+    max_ind = 0
+    for mol_name in sorted(mol_list_dict.keys()):
+        native_tuples = mol_list_dict[mol_name]
+        fp_num = len(native_tuples)
+        row_inds = range(max_ind, max_ind + fp_num)
+        mol_indices_dict[mol_name] = row_inds
+        max_ind += fp_num
+        row_inds, col_inds = zip(
+            *[(i, j) for i, n in itertools.izip(row_inds, native_tuples)
+              for j in native_tuple_to_indices(n)])
+        all_row_inds.extend(row_inds)
+        all_col_inds.extend(col_inds)
     del mol_list_dict
+
+    if dense:
+        all_fps = np.zeros((max_ind, bit_num), dtype=dtype)
+        all_fps[(all_row_inds, all_col_inds)] = True
+    else:
+        all_fps = csr_matrix(
+            ([True] * len(all_row_inds), (all_row_inds, all_col_inds)),
+            shape=(max_ind, bit_num), dtype=dtype)
+    del all_row_inds, all_col_inds
+
     return all_fps, mol_indices_dict
 
 
