@@ -14,6 +14,7 @@ from seashell.cli.fputil import FingerprintType
 from seashell.common.read_csv import read_csv_mols
 from seashell.cli.library_cli import read_targets, write_targets, \
                                         CSV_SUBSEP_TARGETS
+from fpcore.fconvert import ascii2string
 
 from python_utilities.io_tools import smart_open
 from e3fp.conformer.util import MolItemName
@@ -171,6 +172,12 @@ def lists_dicts_to_molecules(molecules_file, smiles_dict, mol_lists_dict,
             fp_list = mol_lists_dict.get(mol_name, [])
             for fp_native, fp_name in fp_list:
                 writer.writerow((fp_name, smiles, fp_native))
+
+
+def native_tuple_to_indices(native_tuple):
+    """Get "on" indices from native tuple."""
+    bitstring = ascii2string(native_tuple[0])
+    return [i for i, char in enumerate(bitstring) if char != "0"]
 
 
 def native_tuples_to_molecules(molecules_file, native_tuples_lists_iter,
