@@ -7,20 +7,24 @@ import os
 import sys
 import csv
 import logging
+import itertools
 
 import numpy as np
+from scipy.sparse import issparse, csr_matrix
 from sklearn import cross_validation as cv
 from sklearn.metrics import auc as sk_auc
 
 from seacore.util.library import SetValue
 from python_utilities.io_tools import touch_dir
+from e3fp_paper.pipeline import native_tuple_to_fprint
 from e3fp_paper.sea_utils.util import molecules_to_lists_dicts, \
                                       lists_dicts_to_molecules, \
                                       targets_to_dict, dict_to_targets, \
                                       targets_to_mol_lists_targets, \
                                       mol_lists_targets_to_targets, \
                                       filter_molecules_by_targets, \
-                                      filter_targets_by_molecules
+                                      filter_targets_by_molecules, \
+                                      native_tuple_to_indices
 
 csv.field_size_limit(sys.maxsize)
 
@@ -163,6 +167,66 @@ def mol_lists_to_cv_mol_lists(mol_lists_dict, k=10):
         test_mol_lists_dict[i] = {mol_id: mol_lists_dict[mol_id]
                                   for mol_id in test_mols}
     return zip(train_mol_lists_dict, test_mol_lists_dict)
+
+
+def molecules_to_array(molecules, dtype=np.float64, dense=False):
+    """Convert molecules to array or sparse matrix.
+
+    Parameters
+    ----------
+    molecules : dict or string
+        Molecules file or mol_list_dict.
+    dtype : type, optional
+        Numpy data type.
+    dense : bool, optional
+        Return dense array.
+
+    Returns
+    -------
+    csr_matrix or ndarray
+        Row-based sparse matrix or ndarray containing fingerprints.
+    dict
+        Map from mol_name to list of row indices of fingerprints.
+    """
+    if dense:
+        logging.info("Populating array with fingerprints.")
+    else:
+        logging.info("Populating sparse matrix with fingerprints.")
+
+    if isinstance(molecules, dict):
+        mol_list_dict = molecules
+    else:
+        _, mol_list_dict, _ = molecules_to_lists_dicts(molecules)
+
+    bit_num = native_tuple_to_fprint(
+        next(mol_list_dict.itervalues())[0]).bits
+    mol_indices_dict = {}
+    all_row_inds = []
+    all_col_inds = []
+    max_ind = 0
+    for mol_name in sorted(mol_list_dict.keys()):
+        native_tuples = mol_list_dict[mol_name]
+        fp_num = len(native_tuples)
+        row_inds = range(max_ind, max_ind + fp_num)
+        mol_indices_dict[mol_name] = row_inds
+        max_ind += fp_num
+        row_inds, col_inds = zip(
+            *[(i, j) for i, n in itertools.izip(row_inds, native_tuples)
+              for j in native_tuple_to_indices(n)])
+        all_row_inds.extend(row_inds)
+        all_col_inds.extend(col_inds)
+    del mol_list_dict
+
+    if dense:
+        all_fps = np.zeros((max_ind, bit_num), dtype=dtype)
+        all_fps[(all_row_inds, all_col_inds)] = True
+    else:
+        all_fps = csr_matrix(
+            ([True] * len(all_row_inds), (all_row_inds, all_col_inds)),
+            shape=(max_ind, bit_num), dtype=dtype)
+    del all_row_inds, all_col_inds
+
+    return all_fps, mol_indices_dict
 
 
 def targets_to_cv_targets(targets_dict, k=10):

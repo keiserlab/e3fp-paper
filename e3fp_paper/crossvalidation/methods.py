@@ -8,7 +8,6 @@ import glob
 import logging
 import sys
 import math
-import itertools
 import cPickle as pkl
 import shelve
 
@@ -25,13 +24,11 @@ from lasagne.nonlinearities import leaky_rectify, softmax
 from nolearn.lasagne import NeuralNet, BatchIterator
 from nolearn_utils.hooks import EarlyStopping
 from python_utilities.io_tools import smart_open, touch_dir
-from e3fp_paper.sea_utils.util import molecules_to_lists_dicts, \
-                                      targets_to_dict, \
+from e3fp_paper.sea_utils.util import targets_to_dict, \
                                       mol_lists_targets_to_targets
-from e3fp_paper.sea_utils.util import native_tuple_to_indices
 from e3fp_paper.sea_utils.library import build_library
 from e3fp_paper.sea_utils.run import sea_set_search
-from e3fp_paper.pipeline import native_tuple_to_fprint
+from e3fp_paper.crossvalidation.util import molecules_to_array
 
 RANDOM_STATE = 42
 
@@ -353,66 +350,6 @@ class ClassifierCVMethodBase(CVMethod):
     def _fit_file_from_target_key(self, target_key):
         """Get filename for target."""
         return os.path.join(self.fit_dir, target_key.tid + ".pkl.gz")
-
-
-def molecules_to_array(molecules, dtype=np.float64, dense=False):
-    """Convert molecules to array or sparse matrix.
-
-    Parameters
-    ----------
-    molecules : dict or string
-        Molecules file or mol_list_dict.
-    dtype : type, optional
-        Numpy data type.
-    dense : bool, optional
-        Return dense array.
-
-    Returns
-    -------
-    csr_matrix or ndarray
-        Row-based sparse matrix or ndarray containing fingerprints.
-    dict
-        Map from mol_name to list of row indices of fingerprints.
-    """
-    if dense:
-        logging.info("Populating array with fingerprints.")
-    else:
-        logging.info("Populating sparse matrix with fingerprints.")
-
-    if isinstance(molecules, dict):
-        mol_list_dict = molecules
-    else:
-        _, mol_list_dict, _ = molecules_to_lists_dicts(molecules)
-
-    bit_num = native_tuple_to_fprint(
-        next(mol_list_dict.itervalues())[0]).bits
-    mol_indices_dict = {}
-    all_row_inds = []
-    all_col_inds = []
-    max_ind = 0
-    for mol_name in sorted(mol_list_dict.keys()):
-        native_tuples = mol_list_dict[mol_name]
-        fp_num = len(native_tuples)
-        row_inds = range(max_ind, max_ind + fp_num)
-        mol_indices_dict[mol_name] = row_inds
-        max_ind += fp_num
-        row_inds, col_inds = zip(
-            *[(i, j) for i, n in itertools.izip(row_inds, native_tuples)
-              for j in native_tuple_to_indices(n)])
-        all_row_inds.extend(row_inds)
-        all_col_inds.extend(col_inds)
-    del mol_list_dict
-
-    if dense:
-        all_fps = np.zeros((max_ind, bit_num), dtype=dtype)
-        all_fps[(all_row_inds, all_col_inds)] = True
-    else:
-        all_fps = csr_matrix(
-            ([True] * len(all_row_inds), (all_row_inds, all_col_inds)),
-            shape=(max_ind, bit_num), dtype=dtype)
-    del all_row_inds, all_col_inds
-
-    return all_fps, mol_indices_dict
 
 
 class SKLearnCVMethodBase(ClassifierCVMethodBase):
