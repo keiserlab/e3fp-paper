@@ -229,6 +229,34 @@ def molecules_to_array(molecules, dtype=np.float64, dense=False):
     return all_fps, mol_indices_dict
 
 
+def save_fprints_arr(fn, arr, mol_indices=None):
+    """Save sparse array to file."""
+    if not issparse(arr):
+        arr = csr_matrix(arr)
+    kwargs = {"dtype": [arr.dtype], "indices": arr.indices,
+              "indptr": arr.indptr, "shape": arr.shape,
+              "ndata": [len(arr.data)], "mol_indices": [mol_indices]}
+    np.savez(fn, **kwargs)
+
+
+def load_fprints_arr(fn, dense=False):
+    """Load sparse array from file."""
+    with np.load(fn) as f:
+        dtype = f["dtype"][0]
+        ndata = f["ndata"][0]
+        indices = f["indices"]
+        indptr = f["indptr"]
+        shape = f["shape"]
+        mol_indices = f["mol_indices"][0]
+        data = np.ones(ndata, dtype=dtype)
+        if dense:
+            return (csr_matrix((data, indices, indptr),
+                               shape=shape).toarray(), mol_indices)
+        else:
+            return (csr_matrix((data, indices, indptr), shape=shape),
+                    mol_indices)
+
+
 def targets_to_cv_targets(targets_dict, k=10):
     """Build `k` train/test target dicts from a target_dict."""
     train_targets_dicts = [{} for i in xrange(k)]
