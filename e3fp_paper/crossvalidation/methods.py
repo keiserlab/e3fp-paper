@@ -28,7 +28,8 @@ from e3fp_paper.sea_utils.util import targets_to_dict, \
                                       mol_lists_targets_to_targets
 from e3fp_paper.sea_utils.library import build_library
 from e3fp_paper.sea_utils.run import sea_set_search
-from e3fp_paper.crossvalidation.util import molecules_to_array
+from e3fp_paper.crossvalidation.util import molecules_to_array, \
+                                            save_fprints_arr, load_fprints_arr
 
 RANDOM_STATE = 42
 
@@ -166,11 +167,14 @@ class ClassifierCVMethodBase(CVMethod):
     default_metric = (0.0,)  # (prob,)
     dtype = np.float64
     dense_data = False
+    fit_file_ext = ".pkl.gz"
 
     def __init__(self, out_dir="", overwrite=False):
         super(ClassifierCVMethodBase, self).__init__(out_dir=out_dir,
                                                      overwrite=overwrite)
         self.fit_dir = os.path.join(self.out_dir, "target_fits")
+        self.train_fp_file = os.path.join(self.out_dir, "fps_train.npz")
+        self.test_fp_file = os.path.join(self.out_dir, "fps_test.npz")
 
     @staticmethod
     def create_clf(data=None):
@@ -207,16 +211,13 @@ class ClassifierCVMethodBase(CVMethod):
             fit_file = self._fit_file_from_target_key(target_key)
         except:  # assume target_key is a fit file.
             fit_file = target_key
-        try:
-            joblib.dump((target_key, clf), fit_file, compress=9)
-        except OverflowError:  # zlib bug in Python 2.7
-            with smart_open(fit_file, "w") as f:
-                pkl.dump((target_key, clf), f)
+        with smart_open(fit_file, "w") as f:
+            pkl.dump((target_key, clf), f)
         return fit_file
 
     def load_fit_file(self, fit_file):
         """Load target fit from file."""
-        try:
+        try:  #backwards compatibility
             target_key, clf = joblib.load(fit_file)
         except KeyError:
             with smart_open(fit_file, "r") as f:
@@ -250,9 +251,16 @@ class ClassifierCVMethodBase(CVMethod):
                             "is dangerous if classes are imbalanced.")
 
         logging.info("Loading molecules for training.")
-        all_fps, mol_indices_dict = molecules_to_array(molecules_file,
-                                                       dtype=self.dtype,
-                                                       dense=self.dense_data)
+        if (os.path.isfile(self.train_fp_file) and not self.overwrite):
+            logging.info("Loading fingerprint array from file.")
+            all_fps, mol_indices_dict = load_fprints_arr(
+                self.train_fp_file, dense=self.dense_data)
+        else:
+            all_fps, mol_indices_dict = molecules_to_array(
+                molecules_file, dtype=self.dtype, dense=self.dense_data)
+            logging.info("Saving fingerprint array to file.")
+            save_fprints_arr(self.train_fp_file, all_fps, mol_indices_dict)
+
         mol_names_set = set(mol_indices_dict.keys())
 
         logging.info("Generating target fits.")
@@ -295,7 +303,7 @@ class ClassifierCVMethodBase(CVMethod):
             else:
                 logging.debug("Fitted {}. ({}/{})".format(target_key.tid,
                                                           i + 1, target_num))
-            self.save_fit_file(fit_file, clf)
+            self.save_fit_file(target_key, clf)
             if (i + 1) % target_perc_num == 0:
                 logging.info("Fit {:.2f}% of targets ({}/{})".format(
                     100 * (i + 1) / float(target_num), i + 1, target_num))
@@ -320,12 +328,20 @@ class ClassifierCVMethodBase(CVMethod):
             {mol_name: {target_key: (metric1, ...), ...}, ...}, where
             where metric1 is the metric used to construct ROC curve.
         """
-        logging.info("Loading test molecules.")
-        test_fps, test_mol_indices_dict = molecules_to_array(
-            test_mol_lists_dict, dtype=self.dtype, dense=self.dense_data)
+        logging.info("Loading molecules for testing.")
+        if (os.path.isfile(self.test_fp_file) and not self.overwrite):
+            logging.info("Loading fingerprint array from file.")
+            test_fps, test_mol_indices_dict = load_fprints_arr(
+                self.test_fp_file, dense=self.dense_data)
+        else:
+            test_fps, test_mol_indices_dict = molecules_to_array(
+                test_mol_lists_dict, dtype=self.dtype, dense=self.dense_data)
+            logging.info("Saving fingerprint array to file.")
+            save_fprints_arr(self.test_fp_file, test_fps,
+                             test_mol_indices_dict)
 
         logging.info("Fetching target fits.")
-        fit_files = glob.glob(os.path.join(self.fit_dir, "*"))
+        fit_files = glob.glob(os.path.join(self.fit_dir, "*" + self.fit_file_ext))
 
         logging.info("Searching molecules against targets.")
         results = {mol_name: {} for mol_name
@@ -349,7 +365,7 @@ class ClassifierCVMethodBase(CVMethod):
 
     def _fit_file_from_target_key(self, target_key):
         """Get filename for target."""
-        return os.path.join(self.fit_dir, target_key.tid + ".pkl.gz")
+        return os.path.join(self.fit_dir, target_key.tid + self.fit_file_ext)
 
 
 class SKLearnCVMethodBase(ClassifierCVMethodBase):
@@ -470,6 +486,7 @@ class NeuralNetCVMethod(ClassifierCVMethodBase):
 
     dtype = np.int32
     dense_data = True
+    fit_file_ext = ".pkl"
 
     def __init__(self, *args, **kwargs):
         super(NeuralNetCVMethod, self).__init__(*args, **kwargs)
@@ -520,7 +537,7 @@ class NeuralNetCVMethod(ClassifierCVMethodBase):
 
     def save_fit_file(self, target_key, clf):
         """Save target fit to file."""
-        fit_file = os.path.join(self.fit_dir, target_key.tid + ".pkl")
+        fit_file = self._fit_file_from_target_key(target_key)
         self.target_fits[fit_file] = target_key
         clf.save_params_to(fit_file)
 
