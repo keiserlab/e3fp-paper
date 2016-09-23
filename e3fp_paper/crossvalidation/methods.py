@@ -18,6 +18,7 @@ from sklearn.metrics.pairwise import check_pairwise_arrays
 from sklearn.utils.extmath import safe_sparse_dot
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.naive_bayes import BernoulliNB
+from sklearn.dummy import DummyClassifier
 from sklearn.externals import joblib
 from lasagne.layers import InputLayer, DenseLayer, DropoutLayer
 from lasagne.nonlinearities import leaky_rectify, softmax
@@ -217,7 +218,7 @@ class ClassifierCVMethodBase(CVMethod):
 
     def load_fit_file(self, fit_file):
         """Load target fit from file."""
-        try:  #backwards compatibility
+        try:  # backwards compatibility
             target_key, clf = joblib.load(fit_file)
         except KeyError:
             with smart_open(fit_file, "r") as f:
@@ -396,15 +397,33 @@ class SKLearnCVMethodBase(ClassifierCVMethodBase):
         return clf.predict_proba(data)[:, 1]
 
 
+class RandomCVMethod(SKLearnCVMethodBase):
+
+    """Cross-validation method using a random classifier.
+
+       This class is provided to develop baseline ROC and Precision-Recall
+       curves/AUCs. It should not be used for actual classification.
+    """
+
+    @staticmethod
+    def create_clf(data=None):
+        """Create random classifier."""
+        return DummyClassifier(strategy="uniform")
+
+
 class SVMCVMethod(SKLearnCVMethodBase):
 
-    """Cross-validation method using a Support Vector Machine."""
+    """Cross-validation method using a Tanimoto Support Vector Machine classifier.
+
+       The resulting SVMs are only feasible if tested with smaller batches.
+    """
 
     default_metric = (-np.inf,)  # (max_dist_from_hyperplane_neg,)
     dense_data = True
 
     @staticmethod
     def create_clf(data=None):
+        """Create SVM classifier with tanimoto kernel."""
         return svm.SVC(kernel=tanimoto_kernel, random_state=RANDOM_STATE)
 
     @staticmethod
@@ -424,12 +443,35 @@ class SVMCVMethod(SKLearnCVMethodBase):
         return clf.decision_function(data)
 
 
+class LinearSVMCVMethod(SVMCVMethod):
+
+    """Cross-validation method using a linear Support Vector Machine classifier.
+
+       Parameters are chosen to optimize speed/memory for sparse arrays.
+    """
+
+    dense_data = False
+
+    @staticmethod
+    def create_clf(data=None):
+        """Create SVM classifier with linear kernel."""
+        return svm.LinearSVC(penalty="l1", dual=False,
+                             class_weight="balanced", loss="squared_hinge",
+                             tol=1e-4, random_state=RANDOM_STATE)
+
+    def save_fit_file(self, target_key, clf):
+        """Save target fit to file."""
+        clf.sparsify()
+        return super(LinearSVMCVMethod, self).save_fit_file(target_key, clf)
+
+
 class RandomForestCVMethod(SKLearnCVMethodBase):
 
     """Cross-validation method using a Random Forest."""
 
     @staticmethod
     def create_clf(data=None):
+        """Create Random Forest classifier."""
         return RandomForestClassifier(n_estimators=100, max_depth=2,
                                       min_samples_split=2, n_jobs=-1,
                                       random_state=RANDOM_STATE,
@@ -495,6 +537,7 @@ class NeuralNetCVMethod(ClassifierCVMethodBase):
 
     @staticmethod
     def create_clf(data=None):
+        """Create neural network."""
         net_params = {"layers": [("input", InputLayer),
                                  ("inputdrop", DropoutLayer),
                                  ("hidden", DenseLayer),
