@@ -9,8 +9,54 @@ import shelve
 
 from zc.lockfile import LockError
 
+from seacore.run import sea_c
+from seacore.run.reference import MemoryReference
 from seacore.run.core import SEASetCore
 from seacore.util.library import TargetKey
+
+
+class FilterableMemoryReference(MemoryReference):
+
+    """MemoryReference that can be filtered by target."""
+
+    setids_filter = None
+
+    def set_filter(self, setids=None):
+        if setids is None:
+            if self.setids_filter is not None and self._precache:
+                self.fingerprints = set(self._library.get_fingerprints_iter())
+            self.setids_filter = None
+        else:
+            if isinstance(setids, tuple):
+                setids = set([setids])
+            else:
+                setids = set(setids)
+            old_filter = self.setids_filter
+            self.setids_filter = setids
+            if setids != old_filter and self._precache:
+                self.fingerprints = set(self.get_filtered_fps())
+
+    def get_filter(self):
+        if self.setids_filter is None:
+            return set()
+        else:
+            return self.setids_filter
+
+    def get_fps(self):
+        if self.setids_filter is not None and not self._precache:
+            all_fps = self.get_filtered_fps()
+        else:
+            all_fps = super(FilterableMemoryReference, self).get_fps()
+        return all_fps
+
+    def get_filtered_fps(self):
+        for setid in self.setids_filter:
+            try:
+                fps = (self._library.raw_fingerprints[cid]
+                       for cid in self._library.sets[setid].cids)
+            except KeyError:
+                continue
+            yield setid, sea_c.build_set(fps)
 
 
 class SEASetSearcher(object):
@@ -38,7 +84,7 @@ class SEASetSearcher(object):
         """
         self.log = log
         self.wipe = wipe
-        self.core = SEASetCore()
+        self.core = SEASetCore(reference_class=FilterableMemoryReference)
         if mol_db is not None:
             self.set_results_dict = shelve.open(mol_db, writeback=True)
         else:
@@ -71,7 +117,7 @@ class SEASetSearcher(object):
         if self.log:
             logging.info("Library loaded.")
 
-    def search(self, mol_name, fp_list, rerun=False):
+    def search(self, mol_name, fp_list=None, target_key=None, rerun=False):
         """Search set of fingerprints for one molecule against library.
 
         Parameters
@@ -81,6 +127,8 @@ class SEASetSearcher(object):
         fp_list : list of tuple
             List of native tuples, each tuple containing native string and
             fingerprint name.
+        target_key : TargetKey, optional
+            Target against which to search the fingerprints.
         rerun : bool, optional
             If True, rerun search if result already exists.
 
@@ -90,8 +138,22 @@ class SEASetSearcher(object):
             Dict of results. Keys are ``TargetKey``, values are a tuple of
             e-value and maximum tanimoto coefficient.
         """
+        if fp_list is None:
+            try:
+                mol_name, fp_list = mol_name
+            except:
+                logging.error("A molecule name and fingerprint list or a "
+                              "tuple containing these must be provided.")
+
+        if target_key is None:
+            self.core.reference.set_filter(None)
+        else:
+            self.core.reference.set_filter(tuple(target_key))
+
         if not rerun and mol_name in self.set_results_dict:
-            return self.set_results_dict[mol_name]
+            if (target_key is None or
+                    target_key in self.set_results_dict[mol_name]):
+                return self.set_results_dict[mol_name]
         try:
             results = self.core.run(fp_list)
         except AttributeError:
@@ -100,7 +162,7 @@ class SEASetSearcher(object):
                 exc_info=True)
             return {}
 
-        logging.debug("SEA Search Results: \n" + repr(results.results))
+        # logging.debug("SEA Search Results: \n" + repr(results.results))
         # self.set_results_dict[mol_name] = {
         #     target_id: (evalue, max_tc)
         #     for _, target_id, hit_affinity, evalue, max_tc
@@ -124,13 +186,17 @@ class SEASetSearcher(object):
             pass
         return self.set_results_dict.get(mol_name, {})
 
-    def batch_search(self, molecules_lists_dict):
+    def batch_search(self, molecules_lists_dict, mol_target_map=None):
         """Search multiple fingerprint sets against SEA library.
 
         Parameters
         ----------
         molecules_lists_dict : dict
             Dict matching molecule name to list of native_tuples.
+        mol_target_map : dict, optional
+            Dict matching molecule name to set of ``TargetKey``s against which
+            to search it. For efficiency, molecules will be searched in order
+            of target.
 
         Returns
         -------
@@ -143,16 +209,39 @@ class SEASetSearcher(object):
                 exc_info=True)
             return False
         logging.info("Searching sets against library.")
-        search_iter = (self.search(k, v)
-                       for k, v in molecules_lists_dict.iteritems())
-        i = 0
-        for result in search_iter:
-            if (i + 1) % 100 == 0:
-                print("Searched {:d} molecules.".format(i + 1))
-            i += 1
+        mol_num = len(molecules_lists_dict.keys())
+        if mol_target_map is None:
+            search_iter = (self.search(k, v)
+                           for k, v in molecules_lists_dict.iteritems())
+            search_num = mol_num
+        else:
+            search_num = 0
+            target_mol_map = {}
+            for m, ts in mol_target_map.iteritems():
+                if isinstance(ts, TargetKey):
+                    ts = set([ts])
+                for t in ts:
+                    search_num += 1
+                    target_mol_map.setdefault(t, set()).add(m)
+            search_iter = (
+                self.search(m, molecules_lists_dict[m], target_key=tkey)
+                for tkey, mnames in target_mol_map.iteritems()
+                for m in mnames)
+
+        try:
+            update_counts = set(range(0, search_num, int(search_num / 100.)))
+        except ValueError:
+            update_counts = set()
+        for i, _ in enumerate(search_iter):
+            if (i + 1) in update_counts:
+                logging.info(
+                    "Performed {:d} of {:d} searches. ({:.1f}%)".format(
+                        i + 1, search_num, 100 * (i + 1) / float(search_num)))
+
         if self.log:
             logging.info(
-                "Searched {:d} molecule sets against library.".format(i + 1))
+                "Searched {:d} molecule sets against library.".format(
+                    mol_num))
         return True
 
     def mol_result(self, mol_name):
@@ -262,7 +351,8 @@ class SEASetSearcher(object):
         self.close()
 
 
-def sea_set_search(library_file, molecules_lists_dict, log=True):
+def sea_set_search(library_file, molecules_lists_dict, mol_target_map=None,
+                   log=True):
     """Get ``SEASetSearcher`` for molecule lists against a SEA library.
 
     Parameters
@@ -271,6 +361,10 @@ def sea_set_search(library_file, molecules_lists_dict, log=True):
         Path to SEA library.
     molecules_lists_dict : dict
         Dict matching molecule name to list of native tuples.
+    mol_target_map : dict, optional
+        Dict matching molecule name to set of ``TargetKey``s against which
+        to search it. For efficiency, molecules will be searched in order
+        of target.
     log : bool, optional
         Create log messages.
 
@@ -288,6 +382,6 @@ def sea_set_search(library_file, molecules_lists_dict, log=True):
         os.remove("{!s}.lock".format(library_file))
         searcher = SEASetSearcher(library_file, log=log)
 
-    searcher.batch_search(molecules_lists_dict)
+    searcher.batch_search(molecules_lists_dict, mol_target_map=mol_target_map)
     searcher.close()
     return searcher
