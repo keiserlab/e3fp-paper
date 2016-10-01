@@ -1,451 +1,465 @@
-"""Run k-fold cross-validation using a provided method.
-
-Author: Seth Axen
-E-mail: seth.axen@gmail.com
-"""
 import os
-import glob
-import tempfile
 import logging
-import cPickle as pickle
+import cPickle as pkl
 
 import numpy as np
+from scipy.sparse import issparse
+from sklearn.model_selection import KFold, StratifiedKFold
+from sklearn.metrics import auc
 from sklearn.metrics import roc_curve, precision_recall_curve
+from python_utilities.io_tools import smart_open, touch_dir
+from python_utilities.parallel import Parallelizer
+from ..sea_utils.util import targets_to_dict, molecules_to_lists_dicts, \
+                             mol_lists_targets_to_targets, \
+                             lists_dicts_to_molecules, dict_to_targets
+from .methods import SEASearchCVMethod
+from ..sea_utils.util import targets_to_mol_lists_targets
+from .util import molecules_to_array, filter_targets_by_molnum, \
+                  targets_to_array, train_test_dicts_from_mask, \
+                  get_roc_prc_auc
 
-from python_utilities.scripting import setup_logging
-from python_utilities.io_tools import touch_dir, smart_open
-from e3fp_paper.sea_utils.util import molecules_to_lists_dicts, \
-                                      mol_lists_targets_to_targets, \
-                                      targets_to_dict
-from e3fp_paper.crossvalidation.util import files_to_cv_files, get_auc
-from e3fp_paper.crossvalidation.methods import SEASearchCVMethod
 
-setup_logging(reset=False)
+class MoleculeSplitter(object):
 
+    """Split target x mol array based on molecules (columns)."""
 
-def files_to_auc(targets_file, molecules_file, k=10, min_mols=50,
-                 affinity=10000, split_by="targets", cv_type="targets",
-                 targets_name="targets", out_dir=os.getcwd(), overwrite=False,
-                 auc_file="aucs.pkl.gz", roc_file="rocs.pkl.gz",
-                 prec_rec_file="prec_rec.pkl.gz",
-                 metrics_labels_file="metrics_labels.pkl.gz",
-                 combined_roc_file=False, cv_method_class=SEASearchCVMethod,
-                 parallelizer=None):
-    """Run k-fold cross-validation on input files.
+    def __init__(self, k, reduce_negatives=False, random_state=None):
+        self.k = k
+        self.reduce_negatives = reduce_negatives
+        self.random_state = random_state
 
-    Parameters
-    ----------
-    targets_file : str
-        All targets
-    molecules_file : str
-        All molecules
-    k : int, optional
-        Number of test/training data pairs to cross-validate.
-    min_mols : int, optional
-        Minimum number of molecules binding to a target for it to be
-        considered.
-    affinity : int, optional
-        Affinity level of binders to consider.
-    split_by : str, optional
-        How to split the data into `k` sets. Options are 'targets' or
-        'molecules'. In the former case, each target's set of molecules as
-        well as the set of targetless molecules, are split into `k` sets. In
-        the latter case, all molecules are split into `k` sets. Must be set to
-        'molecules' if `cv_type` is 'molecules'.
-    cv_type : str, optional
-        Type of cross-validation to run. Options are 'targets' or 'molecules'.
-        In 'targets', ROC curves and AUCs are calculated for each target by
-        searching test molecules against it and removing all test molecules
-        that were not associated with it in the training data. In 'molecules',
-        ROC curves and AUCs are calculated for each molecule.
-    targets_name : str, optional
-        Targets filename prefix.
-    out_dir : Attribute, optional
-        Directory to which to write output files.
-    overwrite : bool, optional
-        Overwrite files.
-    auc_file : str, optional
-        Filename to which to write AUCs dict.
-    roc_file : str, optional
-        Filename to which to write ROCs dict.
-    prec_rec_file : str, optional
-        File where precision recall curve should be saved.
-    metrics_labels_file : str, optional
-        Filename to which to write raw metrics and labels for computing ROCs.
-    combined_roc_file : bool, optional
-        Compute and save combined ROC curve for all `k` sets.
-    cv_method_class : type of CVMethod, optional
-        Method to use for building a training model and comparing a test set
-        of molecules against a training set.
-    parallelizer : Parallelizer or None, optional
-        Parallelizer for running the k CVs in parallel.
+    def get_train_test_masks(self, target_mol_arr):
+        ntargets, nmols = target_mol_arr.shape
+        if self.reduce_negatives and issparse(target_mol_arr):
+            target_mol_arr = target_mol_arr.toarray().astype('bool')
 
-    Returns
-    -------
-    mean_auc : float
-        Average AUC over all k CV runs.
-    """
-    if cv_type == "molecules" and split_by != "molecules":
-        raise ValueError("If `cv_type` is 'molecules', `split_by` must also ",
-                         "be 'molecules'.")
+        kfold = KFold(n_splits=self.k, shuffle=True,
+                      random_state=self.random_state)
+        masks = []
+        for i, (_, test) in enumerate(kfold.split(np.arange(nmols),
+                                                  np.arange(nmols))):
+            mask = np.ones((ntargets, nmols), dtype=np.byte) * -1
+            mask[:, test] = 1
+            if self.reduce_negatives:
+                mask = self.reduce_negatives_from_mask(mask, target_mol_arr)
+            masks.append(mask)
+        return masks
 
-    logging.info("Writing cross-validation files.")
-    cv_files_iter = files_to_cv_files(targets_file, molecules_file, k=k,
-                                      n=min_mols, affinity=affinity,
-                                      out_dir=out_dir, overwrite=overwrite,
-                                      split_by=split_by)
+    def reduce_negatives_from_mask(self, mask, target_mol_arr):
+        test_mask = mask == 1
+        train_mask = mask == -1
 
-    args_list = []
-    for i, (train_targets_file,
-            train_molecules_file,
-            test_targets_file,
-            test_molecules_file) in enumerate(cv_files_iter):
-        msg = " ({:d} / {:d})".format(i + 1, k)
-        cv_dir = os.path.dirname(train_targets_file)
-        cv_auc_file = os.path.join(cv_dir, auc_file)
-        cv_roc_file = os.path.join(cv_dir, roc_file)
-        cv_prec_rec_file = os.path.join(cv_dir, prec_rec_file)
-        cv_metrics_labels_file = os.path.join(cv_dir, metrics_labels_file)
-        results_file = os.path.join(cv_dir, "results.pkl.gz")
-        args_list.append((molecules_file, test_targets_file,
-                          test_molecules_file, train_targets_file,
-                          train_molecules_file, cv_auc_file, cv_roc_file,
-                          cv_prec_rec_file, cv_metrics_labels_file,
-                          results_file, cv_method_class, cv_type, msg,
-                          overwrite, cv_dir))
+        num_before = np.sum((mask != 0) & (target_mol_arr == 0))
+        test_neg_inds = np.where(
+            ~np.any(test_mask & target_mol_arr, axis=0))[0]
+        test_remove_arr = np.zeros_like(target_mol_arr, dtype='bool')
+        test_remove_arr[:, test_neg_inds] = 1
+        test_remove_arr[train_mask] = 0
+        mask[test_remove_arr] = 0
+        del test_neg_inds, test_remove_arr
 
-    if parallelizer is not None:
-        mean_aucs = np.asarray(
-            zip(*parallelizer.run(run_cv, iter(args_list)))[0],
-            dtype=np.double)
-    else:
-        mean_aucs = np.asarray([run_cv(*x) for x in args_list],
-                               dtype=np.double)
+        train_mask = mask == -1
+        train_neg_inds = np.where(
+            ~np.any(train_mask & target_mol_arr, axis=0))[0]
+        train_remove_arr = np.zeros_like(target_mol_arr, dtype='bool')
+        train_remove_arr[:, train_neg_inds] = 1
+        train_remove_arr[test_mask] = 0
+        mask[train_remove_arr] = 0
+        del test_mask, train_mask, train_neg_inds, train_remove_arr
 
-    if combined_roc_file and (overwrite or not os.path.isfile(roc_file)):
-        logging.info("Computing combined ROC curve.")
-        fns = glob.glob(os.path.join(out_dir, "*", metrics_labels_file))
-        if len(fns) == 0:
-            logging.warning(
-                "Combined ROC curve cannot be calculated because data files do not exist.")
+        num_after = np.sum((mask != 0) & (target_mol_arr == 0))
+        if num_before == num_after:
+            logging.info("No negatives were reduced.")
         else:
-            # use memmap because these arrays are massive
-            memmap = None
-            _, memmap_fn = tempfile.mkstemp(".dat")
-            curr_ind = 0
-            memmap_len_mult = 2.  # double the length of memmap, just to be safe
-            for fn in fns:
-                with smart_open(fn, "rb") as f:
-                    metrics_labels = pickle.load(f)
-                    if memmap is None:
-                        roc_num = len(metrics_labels) * k
-                        label_num = max([x[1].shape[0] for x in metrics_labels.itervalues()])
-                        memmap = np.memmap(memmap_fn, dtype='float64',
-                                           mode='w+',
-                                           shape=(2, int(memmap_len_mult * roc_num * label_num)),
-                                           order='F')
-                        logging.debug("Opened memmap with shape {}".format(memmap.shape))
-                    for metrics, labels in metrics_labels.itervalues():
-                        new_ind = curr_ind + metrics.shape[1]
-                        memmap[0, curr_ind:new_ind] = metrics[0]
-                        memmap[1, curr_ind:new_ind] = labels[:]
-                        curr_ind = new_ind
-                    del metrics_labels
-            logging.debug("Filled {} indices of memmap".format(curr_ind))
-            comb_fp_tp, _, comb_roc_auc = metrics_to_roc_auc(
-                memmap[0, :new_ind], memmap[1, :new_ind])
-            os.remove(memmap_fn)
-            logging.info("Combined ROC AUC: {:.4f}.".format(comb_roc_auc))
-            with smart_open(roc_file, "wb") as f:
-                pickle.dump(comb_fp_tp, f)
-            logging.info("Wrote combined ROC file to {}".format(roc_file))
-
-    cv_mean_auc = np.mean(mean_aucs)
-    logging.info("CV Mean AUC: {:.4f}.".format(cv_mean_auc))
-
-    return cv_mean_auc
+            logging.info("Number of negatives reduced from {} to {}.".format(
+                num_before, num_after))
+        return mask
 
 
-def run_cv(molecules_file, test_targets_file, test_molecules_file,
-           train_targets_file, train_molecules_file, auc_file, roc_file,
-           prec_rec_file, metrics_labels_file, results_file, cv_method_class,
-           cv_type="targets", msg="", overwrite=False, out_dir=None):
-    """Run a single cross-validation on input training/test files.
+class ByTargetMoleculeSplitter(MoleculeSplitter):
 
-    Parameters
-    ----------
-    molecules_file : str
-        All molecules
-    test_targets_file : str
-        Targets and corresponding molecules in test set
-    test_molecules_file : str
-        Test molecules (usually not disjoint from training molecules)
-    train_targets_file : str
-        Targets and corresponding molecules in training set
-    train_molecules_file : str
-        Training molecules (usually not disjoint from test molecules)
-    auc_file : str
-        File to which to write AUCs.
-    roc_file : str
-        File to which to write ROCs.
-    prec_rec_file : str
-        File where precision recall curve should be saved.
-    results_file : str
-        File to which to write results.
-    cv_method_class : Type
-        CVMethod class to use for comparison of test molecules against
-        training molecules.
-    cv_type : str, optional
-        Type of cross-validation to run. Options are 'targets' or 'molecules'.
-    msg : str, optional
-        Message to append to log messages.
-    overwrite : bool, optional
-        Overwrite files.
-    out_dir : str, optional
-        Directory in which to save fit files. Defaults to directory where
-        input files are contained.
+    """Split target by mol array based on targets (rows).
 
-    Returns
-    -------
-    mean_auc : float
-        Average AUC over targets or molecules (depending on `type`).
+       Test/training sets are stratified to balance number of known binders
+       per target in each fold.
     """
-    if out_dir is None:
-        out_dir = os.path.dirname(train_molecules_file)
-    touch_dir(out_dir)
-    cv_method = cv_method_class(out_dir=out_dir, overwrite=overwrite)
-    logging.info("Training model. {}".format(msg))
-    cv_method.train(train_molecules_file, train_targets_file)
+    def get_train_test_masks(self, target_mol_arr):
+        ntargets, nmols = target_mol_arr.shape
+        if self.reduce_negatives and issparse(target_mol_arr):
+            target_mol_arr = target_mol_arr.toarray().astype('bool')
 
-    if (os.path.isfile(auc_file) and os.path.isfile(roc_file) and
-        not overwrite):
-        logging.info("Loading CV results from files.{}".format(msg))
-        with smart_open(auc_file, "rb") as f:
-            aucs_dict = pickle.load(f)
-        # with smart_open(roc_file, "rb") as f:
-        #     fp_tp_rates_dict = pickle.load(f)
-        # try:
-        #     x, y = fp_tp_rates.values()[0]
-        # except ValueError:  # old style, no thresholds
-        #     fp_tp_rates = {k: (v, None) for k, v in fp_tp_rates.iteritems()}
-    else:
-        logging.info(
-            "Searching test against training.{}".format(msg))
-        (metrics_labels, fp_tp_rates_dict,
-         aucs_dict, prec_rec_dict, results_dict) = cv_files_to_roc_auc(
-            molecules_file, test_targets_file, test_molecules_file,
-            train_targets_file, train_molecules_file, cv_method,
-            cv_type=cv_type)
+        kfold = StratifiedKFold(n_splits=self.k, shuffle=True,
+                                random_state=self.random_state)
 
-        if overwrite or not os.path.isfile(auc_file):
-            with smart_open(auc_file, "wb") as f:
-                pickle.dump(aucs_dict, f)
+        masks = [np.ones((ntargets, nmols), dtype=np.byte) * -1
+                 for i in range(self.k)]
+        for i in xrange(ntargets):
+            y = target_mol_arr[i, :]
+            if issparse(y):
+                y = y.toarray().ravel()
+            for j, (_, test) in enumerate(kfold.split(y, y)):
+                masks[j][i, test] = 1
 
-        if overwrite or not os.path.isfile(roc_file):
-            with smart_open(roc_file, "wb") as f:
-                pickle.dump(fp_tp_rates_dict, f)
-
-        if overwrite or not os.path.isfile(prec_rec_file):
-            with smart_open(prec_rec_file, "wb") as f:
-                pickle.dump(prec_rec_dict, f)
-
-        # if overwrite or not os.path.isfile(results_file):
-        #     with smart_open(results_file, "wb") as f:
-        #         pickle.dump(results_dict, f)
-
-        # if overwrite or not os.path.isfile(metrics_labels_file):
-        #     with smart_open(metrics_labels_file, "wb") as f:
-        #         pickle.dump(metrics_labels, f)
-
-    mean_auc = np.mean([x for x in aucs_dict.values() if x is not None])
-    logging.info("Mean AUC: {:.4f}{}.".format(mean_auc, msg))
-    return mean_auc
+        if self.reduce_negatives:
+            masks = [self.reduce_negatives_from_mask(mask, target_mol_arr)
+                     for mask in masks]
+        return masks
 
 
-def cv_files_to_roc_auc(molecules_file, test_targets_file,
-                        test_molecules_file, train_targets_file,
-                        train_molecules_file, cv_method, affinity=10000,
-                        cv_type="targets"):
-    """Get ROCs dict (false/true positives) and AUCs dict.
+class KFoldCrossValidator(object):
 
-    Parameters
-    ----------
-    molecules_file : str
-        All molecules
-    test_targets_file : str
-        Targets and corresponding molecules in test set
-    test_molecules_file : str
-        Test molecules (usually not disjoint from training molecules)
-    train_targets_file : str
-        Targets and corresponding molecules in training set
-    train_molecules_file : str
-        Training molecules.
-    cv_method : CVMethod
-        Method to use for cross-validation
-    affinity : int, optional
-        Affinity level of binders to consider.
-    cv_type : str, optional
-        Type of cross-validation to run. Options are 'targets' or 'molecules'.
+    """Class to perform k-fold cross-validation."""
 
-    Returns
-    -------
-    metrics_labels : dict
-        Dict matching mol_name or target_key to a tuple of metrics and labels.
-        Metrics is an nxN array where the first row contains the metric used
-        for ROC thresholds. labels is a length N array containing 1 for
-        positives and 0 for negatives in the test set.
-    fp_tp_rates_dict : dict
-        Dict matching a key to a tuple containing a 2xN array with false
-        positive rates and true positive rates at the same N thresholds and
-        the thresholds. If `cv_type` is 'targets', key is a ``TargetKey``. If
-        `cv_type` is 'molecules', key is a molecule id. The rows of the array,
-        when plotted against each other, form an ROC curve.
-    aucs_dict : dict
-        Dict matching key (same as in `fp_tp_rates_dict`) to AUC for ROC
-        curve.
-    prec_rec_dict : dict
-        Dict matching key to a tuple of precision, recall, and threshold
-        arrays.
-    results : dict
-        Raw results dict of format
-        {mol_name: {target_key: (metric1,...),...},...}.
-    """
-    if cv_type not in ("targets", "molecules"):
-        raise ValueError(
-            "Valid options for `cv_type` are 'targets' and 'molecules'")
+    def __init__(self, k=5, splitter=MoleculeSplitter,
+                 cv_method_class=SEASearchCVMethod, parallelizer=None,
+                 out_dir=os.getcwd(), overwrite=False, return_auc_type="roc",
+                 reduce_negatives=False, fold_kwargs={}):
+        if isinstance(splitter, type):
+            self.splitter = splitter(k)
+        else:
+            assert splitter.k == k
+            self.splitter = splitter
+        self.k = k
+        self.cv_method_class = cv_method_class
+        self.overwrite = overwrite
+        if parallelizer is None:
+            self.parallelizer = Parallelizer(parallel_mode="serial")
+        else:
+            self.parallelizer = parallelizer
+        self.out_dir = out_dir
+        touch_dir(out_dir)
+        self.input_file = os.path.join(self.out_dir, "inputs.pkl.bz2")
+        self.return_auc_type = return_auc_type.lower()
+        self.reduce_negatives = reduce_negatives
+        self.fold_kwargs = fold_kwargs
 
-    aucs_dict = {}
-    fp_tp_rates_dict = {}
-    prec_rec_dict = {}
-    metrics_labels = {}
-    _, mol_lists_dict, _ = molecules_to_lists_dicts(molecules_file)
-    all_molecules = set(mol_lists_dict.keys())
-    del mol_lists_dict
+    def run(self, molecules_file, targets_file, min_mols=50, affinity=None,
+            overwrite=False):
+        fold_validators = {
+            fold_num: FoldValidator(fold_num, self._get_fold_dir(fold_num),
+                                    cv_method_class=self.cv_method_class,
+                                    input_file=self.input_file,
+                                    overwrite=self.overwrite,
+                                    **self.fold_kwargs)
+           for fold_num in range(self.k)}
+        if not os.path.isfile(self.input_file) or not all(
+                [x.fold_files_exist() for x in fold_validators.values()]):
+            logging.info("Loading and filtering input files.")
+            ((smiles_dict, mol_list_dict, fp_type),
+             target_dict) = self.load_input_files(molecules_file, targets_file,
+                                                  min_mols=min_mols,
+                                                  affinity=affinity)
 
-    _, test_mol_lists_dict, _ = molecules_to_lists_dicts(test_molecules_file)
-    del _
+            mol_list = sorted(mol_list_dict.keys())
+            if self.cv_method_class is SEASearchCVMethod:  # efficiency hack
+                fp_array, mol_to_fp_inds = (None, None)
+            else:
+                logging.info("Converting inputs to arrays.")
+                fp_array, mol_to_fp_inds = molecules_to_array(
+                    mol_list_dict, mol_list, dtype=np.byte)
+            target_mol_array, target_list = targets_to_array(
+                target_dict, mol_list, dtype=np.byte)
+            total_imbalance = get_imbalance(target_mol_array)
 
-    results = cv_method.test(test_mol_lists_dict)
+            if self.overwrite or not os.path.isfile(self.input_file):
+                logging.info("Saving arrays and labels to files.")
+                with smart_open(self.input_file, "wb") as f:
+                    pkl.dump((fp_array, mol_to_fp_inds, target_mol_array,
+                              target_list, mol_list), f,
+                             pkl.HIGHEST_PROTOCOL)
+            del fp_array, mol_to_fp_inds
 
-    train_targets_dict = mol_lists_targets_to_targets(
-        targets_to_dict(train_targets_file))
-    test_targets_dict = mol_lists_targets_to_targets(
-        targets_to_dict(test_targets_file))
+            logging.info("Splitting data into {} folds using {}.".format(
+                self.k, type(self.splitter).__name__))
+            if self.splitter.reduce_negatives:
+                logging.info("After splitting, negatives will be reduced.")
+            train_test_masks = self.splitter.get_train_test_masks(
+                target_mol_array)
+            for fold_num, train_test_mask in enumerate(train_test_masks):
+                logging.info(
+                    "Saving inputs to files (fold {})".format(fold_num))
+                fold_val = fold_validators[fold_num]
+                fold_val.save_fold_files(train_test_mask, mol_list,
+                                         target_list, smiles_dict,
+                                         mol_list_dict, fp_type, target_dict)
+            del (smiles_dict, mol_list_dict, fp_type, target_mol_array,
+                 mol_list, train_test_masks, target_dict, target_list)
+        else:
+            logging.info("Resuming from input and fold files.")
+            with smart_open(self.input_file, "rb") as f:
+                (fp_array, mol_to_fp_inds, target_mol_array,
+                 target_list, mol_list) = pkl.load(f)
+            total_imbalance = get_imbalance(target_mol_array)
+            del (fp_array, mol_to_fp_inds, target_mol_array, target_list,
+                 mol_list)
 
-    if cv_type == "targets":
-        logging.info("Calculating ROC curves and AUCs for targets.")
-        for target_key in train_targets_dict.iterkeys():
-            # All mols used to train target
-            trained_mols = set(train_targets_dict[target_key].cids)
-            if len(trained_mols) == 0:  # target definitely has no hits
-                continue
-            # All mols not used to train target (test but not necessarily pos)
-            tested_mols = all_molecules.difference(trained_mols)
-            # Tested mols that SHOULD hit to target
-            test_true_mols = set(test_targets_dict[target_key].cids)
-            # Array of 1 for what should be hits, 0 for what shouldn't be hits
-            true_false = np.array([x in test_true_mols for x in tested_mols],
-                                  dtype=np.int)
+        # run cross-validation and gather scores
+        logging.info("Running fold validation.")
+        para_args = sorted(fold_validators.items())
+        aucs = zip(*self.parallelizer.run(_run_fold, para_args))[0]
+        if fold_validators.values()[0].compute_combined:
+            aurocs, auprcs = zip(*aucs)
+            mean_auroc = np.mean(aurocs)
+            std_auroc = np.std(aurocs)
+            logging.info("CV Mean AUROC: {:.4f} +/- {:.4f}".format(mean_auroc,
+                                                                   std_auroc))
+            mean_auprc = np.mean(auprcs)
+            std_auprc = np.std(auprcs)
+            logging.info(("CV Mean AUPRC: {:.4f} +/- {:.4f} ({:.4f} of data "
+                          "is positive)").format(mean_auprc, std_auprc,
+                                                 total_imbalance))
+        else:
+            (mean_auroc, mean_auprc) = (None, None)
 
-            # Metrics for target/mol pair in test set.
-            metrics = np.array(
-                [results.get(x, {}).get(target_key, cv_method.default_metric)
-                 for x in tested_mols], dtype=np.double).T
+        target_aucs = []
+        for fold_val in fold_validators.values():
+            with smart_open(fold_val.target_aucs_file, "rb") as f:
+                target_aucs.extend(pkl.load(f).values())
+        target_aucs = np.array(target_aucs)
+        mean_target_auroc, mean_target_auprc = np.mean(target_aucs, axis=0)
+        std_target_auroc, std_target_auprc = np.std(target_aucs, axis=0)
+        logging.info("CV Mean Target AUROC: {:.4f} +/- {:.4f}".format(
+            mean_target_auroc, std_target_auroc))
+        logging.info("CV Mean Target AUPRC: {:.4f} +/- {:.4f}".format(
+            mean_target_auprc, std_target_auprc))
 
-            metrics_labels[target_key] = (metrics, true_false)
-            fp_tp_rates, thresholds, auc = metrics_to_roc_auc(
-                metrics[0], true_false, name=target_key.tid)
-            fp_tp_rates_dict[target_key] = (fp_tp_rates, thresholds)
-            aucs_dict[target_key] = auc
+        if "target" in self.return_auc_type or mean_auroc is None:
+            logging.info("Returning target AUC.")
+            aucs = (mean_target_auroc, mean_target_auprc)
+        else:
+            logging.info("Returning combined average AUC.")
+            aucs = (mean_auroc, mean_auprc)
 
-            prec, rec, thresholds = precision_recall_curve(true_false,
-                                                           metrics[0])
-            prec_rec_dict[target_key] = (prec, rec, thresholds)
+        if "pr" in self.return_auc_type:
+            logging.info("Returned AUC is AUPRC.")
+            return aucs[1]
+        else:
+            logging.info("Returned AUC is AUROC.")
+            return aucs[0]
 
-    else:
-        logging.info("Calculating ROC curves and AUCs for molecules.")
-        mol_to_target_keys_dict = {}
-        for target_key, set_value in test_targets_dict.iteritems():
-            for cid in set_value.cids:
-                mol_to_target_keys_dict.setdefault(cid, set()).add(target_key)
+    def load_input_files(self, molecules_file, targets_file, min_mols=50,
+                         affinity=None, overwrite=False):
+        mol_names_target_dict = mol_lists_targets_to_targets(
+            targets_to_dict(targets_file, affinity=affinity))
+        target_dict = filter_targets_by_molnum(mol_names_target_dict,
+                                               n=min_mols)
+        del mol_names_target_dict
+        smiles_dict, mol_lists_dict, fp_type = molecules_to_lists_dicts(
+            molecules_file)
 
-        tested_targets = set(test_targets_dict.keys())
+        return (smiles_dict, mol_lists_dict, fp_type), target_dict
 
-        for mol_name in test_mol_lists_dict.iterkeys():
+    def _get_fold_dir(self, fold_num):
+        return os.path.join(self.out_dir, str(fold_num))
+
+
+class FoldValidator(object):
+
+    """Class to perform validation on a single fold."""
+
+    def __init__(self, fold_num, out_dir, cv_method_class=SEASearchCVMethod,
+                 input_file=os.path.join(os.getcwd(), "input.pkl.bz2"),
+                 compute_combined=True, overwrite=False):
+        self.fold_num = fold_num
+        self.out_dir = out_dir
+        touch_dir(self.out_dir)
+        self.input_file = input_file
+        self.mask_file = os.path.join(out_dir, "train_test_mask.pkl.bz2")
+        self.results_file = os.path.join(out_dir, "results.pkl.bz2")
+        self.target_aucs_file = os.path.join(out_dir, "target_aucs.pkl.bz2")
+        self.combined_roc_file = os.path.join(out_dir, "combined_roc.pkl.bz2")
+        self.combined_prc_file = os.path.join(out_dir, "combined_prc.pkl.bz2")
+        self.cv_method = cv_method_class(out_dir=out_dir, overwrite=overwrite)
+        self.compute_combined = compute_combined
+        self.overwrite = overwrite
+
+    def run(self):
+        logging.debug("Loading input files for fold. (fold {})".format(
+            self.fold_num))
+        with smart_open(self.input_file, "rb") as f:
+            (fp_array, mol_to_fp_inds, target_mol_array,
+             target_list, mol_list) = pkl.load(f)
+
+        with smart_open(self.mask_file, "rb") as f:
+            train_test_mask = pkl.load(f)
+        test_mask = train_test_mask == 1
+        train_mask = train_test_mask == -1
+        del train_test_mask
+
+        if issparse(target_mol_array):
+            target_mol_array = target_mol_array.toarray().astype('bool')
+
+        if self.overwrite or not os.path.isfile(self.results_file):
+            train_mask = np.invert(test_mask)
+            if not self.cv_method.is_trained(target_list):
+                logging.info("Training models. (fold {})".format(
+                    self.fold_num))
+                self.cv_method.train(fp_array, mol_to_fp_inds,
+                                     target_mol_array, target_list, mol_list,
+                                     mask=train_mask)
+            del train_mask
+
+            logging.info("Testing models. (fold {})".format(self.fold_num))
+            results = self.cv_method.test(fp_array, mol_to_fp_inds,
+                                          target_mol_array, target_list,
+                                          mol_list, mask=test_mask)
             try:
-                test_true_targets = set(mol_to_target_keys_dict[mol_name])
-            except KeyError:  # mol has no targets (neg data)
+                with smart_open(self.results_file, "wb") as f:
+                    pkl.dump(results, f, pkl.HIGHEST_PROTOCOL)
+            except:  # workaround for Python 2 pickling bug
+                np.savez_compressed(self.results_file, results=results)
+        else:
+            logging.info("Loading results from file. (fold {})".format(
+                self.fold_num))
+            try:
+                with smart_open(self.results_file, "rb") as f:
+                    results = pkl.load(f)
+            except:
+                with np.load(self.results_file) as data:
+                    results = data["results"]
+        del mol_list, fp_array, mol_to_fp_inds
+
+        logging.info(("Computing target ROC and PR curves and AUCs. "
+                      "(fold {})").format(self.fold_num))
+        target_aucs = {}
+        imbalances = []
+        for i, target_key in enumerate(target_list):
+            test_inds = np.where(test_mask[i, :])[0]
+            y_true = target_mol_array[i, test_inds]
+            y_score = results[i, test_inds]
+            try:
+                roc, auroc, prc, auprc = get_roc_prc_auc(y_true, y_score)
+            except:
+                logging.exception(
+                    "Could not builds curves for target {} (fold {})".format(
+                        target_key.tid, self.fold_num))
                 continue
-            true_false = np.array([x in test_true_targets for x
-                                   in tested_targets], dtype=np.int)
+            target_aucs[target_key] = (auroc, auprc)
+            imbalance = get_imbalance(y_true)
+            imbalances.append(imbalance)
+            logging.info(("Target {} produced an AUROC of {:.4f} and an AUPRC"
+                          " of {:.4f}. ({:.4f} of data is positive) "
+                          "(fold {})").format(target_key.tid, auroc, auprc,
+                                              imbalance, self.fold_num))
+        del roc, prc, y_true, y_score, target_list
+        with smart_open(self.target_aucs_file, "wb") as f:
+            pkl.dump(target_aucs, f, pkl.HIGHEST_PROTOCOL)
+        target_aucs = np.array(target_aucs.values())
+        mean_target_auroc, mean_target_auprc = np.mean(target_aucs, axis=0)
+        std_target_auroc, std_target_auprc = np.std(target_aucs, axis=0)
+        mean_imbalance, std_imbalance = (np.mean(imbalances),
+                                         np.std(imbalances))
+        logging.info(("Targets produced an average AUROC of {:.4f} +/- {:.4f}"
+                      " and AUPRC of {:.4f} +/- {:.4f}. ({:.4f} +/- "
+                      "{:.4f} of data is positive) (fold {})").format(
+                          mean_target_auroc, std_target_auroc,
+                          mean_target_auprc, std_target_auprc,
+                          mean_imbalance, std_imbalance, self.fold_num))
+        del target_aucs, imbalances
 
-            # Metrics for target/mol pair in test set.
-            metrics = np.array(
-                [results.get(mol_name, {}).get(target_key,
-                                               cv_method.default_metric)
-                 for target_key in tested_targets], dtype=np.double).T
+        if self.compute_combined:
+            logging.info(("Computing combined ROC and PR curves and AUCs. "
+                          "(fold {})").format(self.fold_num))
+            y_true = target_mol_array[test_mask].ravel()
+            y_score = results[test_mask].ravel()
+            nan_inds = np.where(~np.isnan(y_score))
+            y_true, y_score = y_true[nan_inds], y_score[nan_inds]
+            del results, test_mask, target_mol_array
 
-            metrics_labels[mol_name] = (metrics, true_false)
-            fp_tp_rates, thresholds, auc = metrics_to_roc_auc(
-                metrics[0], true_false, name=mol_name)
-            fp_tp_rates_dict[mol_name] = (fp_tp_rates, thresholds)
-            aucs_dict[mol_name] = auc
+            logging.debug("Computing combined ROC curve (fold {})".format(
+                self.fold_num))
+            roc = roc_curve(y_true, y_score, drop_intermediate=True)
+            auroc = auc(roc[0], roc[1])
+            with smart_open(self.combined_roc_file, "wb") as f:
+                pkl.dump(roc, f, pkl.HIGHEST_PROTOCOL)
+            del roc
 
-            prec, rec, thresholds = precision_recall_curve(true_false,
-                                                           metrics[0])
-            prec_rec_dict[target_key] = (prec, rec, thresholds)
+            logging.debug("Computing combined PR curve (fold {})".format(
+                self.fold_num))
+            precision, recall, prc_thresh = precision_recall_curve(
+                y_true, y_score)
+            prc = (recall, precision, prc_thresh)
+            auprc = auc(prc[0], prc[1])
+            with smart_open(self.combined_prc_file, "wb") as f:
+                pkl.dump(prc, f, pkl.HIGHEST_PROTOCOL)
+            del prc
 
-    return metrics_labels, fp_tp_rates_dict, aucs_dict, prec_rec_dict, results
+            imbalance = get_imbalance(y_true)
+            logging.info(("Fold {} produced an AUROC of {:.4f} and an AUPRC"
+                          " of {:.4f}. ({:.4f} of data is positive)").format(
+                              self.fold_num, auroc, auprc, imbalance))
+
+            return (auroc, auprc)
+        else:
+            return None
+
+    def save_fold_files(self, train_test_mask, mol_list, target_list,
+                        smiles_dict, mol_list_dict, fp_type, target_dict):
+        with smart_open(self.mask_file, "wb") as f:
+            pkl.dump(train_test_mask, f, pkl.HIGHEST_PROTOCOL)
+
+        if not isinstance(self.cv_method, SEASearchCVMethod):
+            return
+
+        test_molecules_file = os.path.join(self.out_dir,
+                                           "test_molecules.csv.bz2")
+        test_targets_file = os.path.join(self.out_dir, "test_targets.csv.bz2")
+        train_molecules_file = os.path.join(self.out_dir,
+                                            "train_molecules.csv.bz2")
+        train_targets_file = os.path.join(self.out_dir,
+                                          "train_targets.csv.bz2")
+
+        if self.overwrite or not all(map(
+                os.path.isfile, (test_molecules_file, test_targets_file,
+                                 train_molecules_file, train_targets_file))):
+            (train_mol_list_dict,
+             train_target_dict,
+             test_mol_list_dict,
+             test_target_dict) = train_test_dicts_from_mask(
+                mol_list_dict, mol_list, target_dict,
+                target_list, train_test_mask)
+            lists_dicts_to_molecules(test_molecules_file, smiles_dict,
+                                     test_mol_list_dict, fp_type)
+            lists_dicts_to_molecules(train_molecules_file, smiles_dict,
+                                     train_mol_list_dict, fp_type)
+            train_target_dict = targets_to_mol_lists_targets(
+                train_target_dict, train_mol_list_dict)
+            test_target_dict = targets_to_mol_lists_targets(
+                test_target_dict, test_mol_list_dict)
+            dict_to_targets(train_targets_file, train_target_dict)
+            dict_to_targets(test_targets_file, test_target_dict)
+
+    def fold_files_exist(self):
+        if not os.path.isfile(self.mask_file):
+            return False
+
+        if not isinstance(self.cv_method, SEASearchCVMethod):
+            test_molecules_file = os.path.join(self.out_dir,
+                                               "test_molecules.csv.bz2")
+            test_targets_file = os.path.join(self.out_dir,
+                                             "test_targets.csv.bz2")
+            train_molecules_file = os.path.join(self.out_dir,
+                                                "train_molecules.csv.bz2")
+            train_targets_file = os.path.join(self.out_dir,
+                                              "train_targets.csv.bz2")
+            if not all(map(os.path.isfile, [test_molecules_file,
+                                            test_targets_file,
+                                            train_molecules_file,
+                                            train_targets_file])):
+                return False
+        return True
 
 
-def metrics_to_roc_auc(metrics, true_false, name=None, order="greater"):
-    """Calculate ROC curve and AUC from metrics and true/false positives.
+def get_imbalance(pos_array):
+    if issparse(pos_array):
+        num_true = pos_array.nnz
+        num_tot = pos_array.shape[0] * pos_array.shape[1]
+    else:
+        num_true = float(np.sum(pos_array))
+        num_tot = pos_array.size
+    imbalance = num_true / float(num_tot)
+    return imbalance
 
-    Parameters
-    ----------
-    metrics : ndarray of double
-        Array of metrics corresponding to positive hits.
-    true_false : ndarray of int
-        Array of 1s and 0s for what should be true hits and false hits,
-        respectively.
-    name : str or None, optional
-        Name of query (molecule name or target id), used for logging.
-    order : str, optional
-        How results are ordered by metric. If "greater," a greater value of
-        the metric is a better hit; if "less", the opposite.
 
-    Returns
-    -------
-    fp_tp_rates : 2xN array of double
-        Array of false positive and true positive rates at all `N` unique
-        metrics. Forms ROC curve.
-    thresholds : Nx1 array of double
-        Array of -log10E thresholds corresponding to `fp_tp_rates`.
-    roc_auc : float
-        AUC of ROC curve formed by `fp_tp_rates`
-    """
-    if true_false.shape[0] == 0:  # No hits! ROC/AUC is meaningless.
-        return None, None, None
-
-    true_num = np.sum(true_false)
-    false_num = true_false.shape[0] - true_num
-    if true_num == 0:
-        if name is not None:
-            logging.error(("{!s} has 0 expected hits! This should never "
-                           "happen.").format(name))
-        return None, None, None
-    elif false_num == 0:
-        if name is not None:
-            logging.warning(("{!s} has all expected hits! This is highly "
-                             "unlikely.").format(name))
-        return None, None, None
-
-    if order == "less":
-        metrics = -metrics
-
-    fpr, tpr, thresholds = roc_curve(true_false, metrics,
-                                     drop_intermediate=True)
-    roc_auc = float(get_auc(fpr, tpr))
-    fp_tp_rates = np.array([fpr, tpr], dtype=np.double)
-
-    return fp_tp_rates, thresholds, roc_auc
+def _run_fold(fold_num, fold_val):
+    return fold_val.run()

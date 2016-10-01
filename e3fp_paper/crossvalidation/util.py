@@ -6,176 +6,56 @@ E-mail: seth.axen@gmail.com
 import os
 import sys
 import csv
-import logging
+import warnings
 import itertools
 
 import numpy as np
-from scipy.sparse import issparse, csr_matrix
-from sklearn import cross_validation as cv
+from scipy.sparse import issparse, lil_matrix, csr_matrix
+# from sklearn import cross_validation as cv
 from sklearn.metrics import auc as sk_auc
-
+from sklearn.metrics import roc_curve, precision_recall_curve
+try:
+    from sklearn.exception import UndefinedMetricWarning
+except ImportError:  # backwards compatibility with versions <0.17.2
+    from sklearn.metrics.base import UndefinedMetricWarning
 from seacore.util.library import SetValue
-from python_utilities.io_tools import touch_dir
-from e3fp_paper.pipeline import native_tuple_to_fprint
-from e3fp_paper.sea_utils.util import molecules_to_lists_dicts, \
-                                      lists_dicts_to_molecules, \
-                                      targets_to_dict, dict_to_targets, \
-                                      targets_to_mol_lists_targets, \
-                                      mol_lists_targets_to_targets, \
-                                      filter_molecules_by_targets, \
-                                      filter_targets_by_molecules, \
-                                      native_tuple_to_indices
+from ..pipeline import native_tuple_to_fprint
+from ..sea_utils.util import molecules_to_lists_dicts, \
+                             targets_to_dict, \
+                             native_tuple_to_indices
 
 csv.field_size_limit(sys.maxsize)
 
 OUT_CSV_EXT_DEF = ".csv.gz"
 
 
-def dicts_to_cv_files(i, out_dir, targets_basename, molecules_basename,
-                      group_type, targets_dict, mol_lists_dict,
-                      smiles_dict, fp_type, overwrite=False,
-                      out_ext=OUT_CSV_EXT_DEF):
-    """Generate molecules/targets test/training files for cross-validation."""
-    cv_targets_file = _make_cv_filename(out_dir, targets_basename, group_type,
-                                        i, out_ext=out_ext)
-    cv_molecules_file = _make_cv_filename(out_dir, molecules_basename,
-                                          group_type, i, out_ext=out_ext)
-
-    make_targets = make_molecules = False
-
-    if overwrite or not os.path.isfile(cv_targets_file):
-        make_targets = True
-    if overwrite or not os.path.isfile(cv_molecules_file):
-        make_molecules = True
-    if not make_targets and not make_molecules:
-        return (cv_targets_file, cv_molecules_file)
-
-    touch_dir(_make_cv_subdir(out_dir, i))
-
-    if make_targets:
-        dict_to_targets(cv_targets_file, targets_dict)
-        logging.info("Saved CV targets to {}.".format(cv_targets_file))
-    if make_molecules:
-        lists_dicts_to_molecules(cv_molecules_file, smiles_dict,
-                                 mol_lists_dict, fp_type)
-        logging.info("Saved CV molecules to {}.".format(cv_molecules_file))
-
-    del mol_lists_dict
-    return (cv_targets_file, cv_molecules_file)
-
-
-def files_to_cv_files(targets_file, molecules_file, k=10, n=50,
-                      affinity=None, out_dir=os.getcwd(), overwrite=False,
-                      out_ext=OUT_CSV_EXT_DEF, split_by='targets'):
-    """Generate molecules/targets test/training files for cross-validation."""
-
-    if split_by not in ('targets', 'molecules'):
-        raise ValueError(
-            "Valid options for `split_by` are 'targets' and 'molecules'")
-
-    targets_basename = _make_csv_basename(targets_file)
-    molecules_basename = _make_csv_basename(molecules_file)
-
-    logging.info("Reading and filtering targets.")
-    mol_names_targets_dict = mol_lists_targets_to_targets(
-        targets_to_dict(targets_file, affinity=affinity))
-    targets_dict = filter_targets_by_molnum(mol_names_targets_dict, n=n)
-    del mol_names_targets_dict
-    logging.info("Reading molecules.")
-    smiles_dict, mol_lists_dict, fp_type = molecules_to_lists_dicts(
-        molecules_file)
-
-    if split_by == 'targets':
-        logging.info("Splitting target molecules into test/training sets.")
-        train_test_targets = targets_to_cv_targets(targets_dict, k=k)
-        train_test_mol_lists = [
-            (filter_molecules_by_targets(mol_lists_dict, train),
-             filter_molecules_by_targets(mol_lists_dict, test))
-            for train, test in train_test_targets]
-        # add negative data back in.
-        neg_mol_names = set(mol_lists_dict.keys()).difference(
-            *[x.cids for x in targets_dict.itervalues()])
-        logging.info("{} molecules have no targets at threshold.".format(
-            len(neg_mol_names)))
-        if len(neg_mol_names) > 0:
-            for i, (neg_train_mols,
-                    neg_test_mols) in enumerate(data_to_train_test(
-                        list(neg_mol_names), k=k)):
-                train_test_mol_lists[i][0].update(
-                    {mol_name: mol_lists_dict[mol_name] for mol_name
-                     in neg_train_mols})
-                train_test_mol_lists[i][1].update(
-                    {mol_name: mol_lists_dict[mol_name] for mol_name
-                     in neg_test_mols})
-        train_test_targets = [
-            (targets_to_mol_lists_targets(train, train_test_mol_lists[i][0]),
-             targets_to_mol_lists_targets(test, train_test_mol_lists[i][1]))
-            for i, (train, test) in enumerate(train_test_targets)]
+def targets_to_array(targets, mol_list, dtype=np.int8, dense=False):
+    if isinstance(targets, dict):
+        targets_dict = targets
     else:
-        logging.info("Splitting all molecules into test/training sets.")
-        train_test_mol_lists = mol_lists_to_cv_mol_lists(mol_lists_dict, k=k)
-        train_test_targets = [
-            (targets_to_mol_lists_targets(
-                filter_targets_by_molecules(targets_dict, train), train),
-             targets_to_mol_lists_targets(
-                filter_targets_by_molecules(targets_dict, test), test))
-            for i, (train, test) in enumerate(train_test_mol_lists)]
-    del targets_dict
-    # del mol_lists_dict
+        targets_dict = targets_to_dict(targets)
+    target_list = sorted(targets_dict.keys())
+    target_num, mol_num = len(target_list), len(mol_list)
 
-    logging.info("Saving cross-validation files.")
-    for i in xrange(k):
-        (train_mol_lists_dict, test_mol_lists_dict) = train_test_mol_lists[i]
-        (train_targets_dict, test_targets_dict) = train_test_targets[i]
+    mol_inds = {x: i for i, x in enumerate(mol_list)}
+    target_mol_array = lil_matrix((target_num, mol_num), dtype=dtype)
+    for i, target_key in enumerate(target_list):
+        inds = [mol_inds[mol_name] for mol_name
+                in targets_dict[target_key].cids]
+        target_mol_array[i, inds] = True
 
-        (train_targets_file,
-         train_molecules_file) = dicts_to_cv_files(
-            i, out_dir, targets_basename, molecules_basename, "train",
-            train_targets_dict, train_mol_lists_dict, smiles_dict, fp_type,
-            out_ext=out_ext, overwrite=overwrite)
-        logging.info("Saved training set files ({:d}/{:d}).".format(i+1, k))
-        del train_targets_dict, train_mol_lists_dict
-
-        (test_targets_file,
-         test_molecules_file) = dicts_to_cv_files(
-            i, out_dir, targets_basename, molecules_basename, "test",
-            test_targets_dict, test_mol_lists_dict, smiles_dict, fp_type,
-            out_ext=out_ext, overwrite=overwrite)
-        logging.info("Saved test set files ({:d}/{:d}).".format(i+1, k))
-        del test_targets_dict, test_mol_lists_dict
-
-        yield (train_targets_file, train_molecules_file,
-               test_targets_file, test_molecules_file)
+    return target_mol_array.tocsr(), target_list
 
 
-def data_to_train_test(data, k=10):
-    """Split data into `k` train/test sets."""
-    data = np.asanyarray(data)
-    kf = cv.KFold(data.shape[0], n_folds=k, shuffle=True)
-    return ((data[train], data[test]) for train, test in kf)
-
-
-def mol_lists_to_cv_mol_lists(mol_lists_dict, k=10):
-    """Build `k` train/test mol list dicts from a mol list dict."""
-    train_mol_lists_dict = [{} for i in xrange(k)]
-    test_mol_lists_dict = [{} for i in xrange(k)]
-    len(mol_lists_dict)
-    for i, (train_mols, test_mols) in enumerate(
-            data_to_train_test(mol_lists_dict.keys(), k=k)):
-        train_mol_lists_dict[i] = {mol_id: mol_lists_dict[mol_id]
-                                   for mol_id in train_mols}
-        test_mol_lists_dict[i] = {mol_id: mol_lists_dict[mol_id]
-                                  for mol_id in test_mols}
-    return zip(train_mol_lists_dict, test_mol_lists_dict)
-
-
-def molecules_to_array(molecules, dtype=np.float64, dense=False):
+def molecules_to_array(molecules, mol_list, dtype=np.int8, dense=False):
     """Convert molecules to array or sparse matrix.
 
     Parameters
     ----------
     molecules : dict or string
         Molecules file or mol_list_dict.
+    mol_list : list
+        List of molecules, used to determine order of array.
     dtype : type, optional
         Numpy data type.
     dense : bool, optional
@@ -183,20 +63,17 @@ def molecules_to_array(molecules, dtype=np.float64, dense=False):
 
     Returns
     -------
-    csr_matrix or ndarray
+    fp_array : ndarray or csr_matrix
         Row-based sparse matrix or ndarray containing fingerprints.
-    dict
-        Map from mol_name to list of row indices of fingerprints.
+    mol_indices : dict
+        Map from index in `mol_list` to list of row indices of fingerprints.
     """
-    if dense:
-        logging.info("Populating array with fingerprints.")
-    else:
-        logging.info("Populating sparse matrix with fingerprints.")
-
     if isinstance(molecules, dict):
         mol_list_dict = molecules
     else:
         _, mol_list_dict, _ = molecules_to_lists_dicts(molecules)
+
+    assert(set(mol_list_dict.keys()) == set(mol_list))
 
     bit_num = native_tuple_to_fprint(
         next(mol_list_dict.itervalues())[0]).bits
@@ -204,11 +81,11 @@ def molecules_to_array(molecules, dtype=np.float64, dense=False):
     all_row_inds = []
     all_col_inds = []
     max_ind = 0
-    for mol_name in sorted(mol_list_dict.keys()):
+    for k, mol_name in enumerate(mol_list):
         native_tuples = mol_list_dict[mol_name]
         fp_num = len(native_tuples)
         row_inds = range(max_ind, max_ind + fp_num)
-        mol_indices_dict[mol_name] = row_inds
+        mol_indices_dict[k] = row_inds
         max_ind += fp_num
         row_inds, col_inds = zip(
             *[(i, j) for i, n in itertools.izip(row_inds, native_tuples)
@@ -227,6 +104,31 @@ def molecules_to_array(molecules, dtype=np.float64, dense=False):
     del all_row_inds, all_col_inds
 
     return all_fps, mol_indices_dict
+
+
+def train_test_dicts_from_mask(mol_list_dict, mol_list, target_dict,
+                               target_list, train_test_mask):
+    test_inds = set(np.where(np.any(train_test_mask == 1, axis=0))[0])
+    train_inds = set(np.where(np.any(train_test_mask == -1, axis=0))[0])
+    test_mol_list_dict = {x: mol_list_dict[x] for i, x in enumerate(mol_list)
+                          if i in test_inds}
+    train_mol_list_dict = {x: mol_list_dict[x] for i, x in enumerate(mol_list)
+                           if i in train_inds}
+
+    test_target_dict = {}
+    train_target_dict = {}
+    for i, target_key in enumerate(target_list):
+        test_mol_inds = np.where(train_test_mask[i, :] == 1)[0]
+        test_mols = {mol_list[j] for j in test_mol_inds}
+        sv = target_dict[target_key]
+        pos_mols = set(sv.cids)
+        test_target_dict[target_key] = SetValue(
+            sv.name, sorted(pos_mols.intersection(test_mols)), sv.description)
+        train_target_dict[target_key] = SetValue(
+            sv.name, sorted(pos_mols.difference(test_mols)), sv.description)
+
+    return (train_mol_list_dict, train_target_dict,
+            test_mol_list_dict, test_target_dict)
 
 
 def save_fprints_arr(fn, arr, mol_indices=None):
@@ -255,20 +157,6 @@ def load_fprints_arr(fn, dense=False):
         else:
             return (csr_matrix((data, indices, indptr), shape=shape),
                     mol_indices)
-
-
-def targets_to_cv_targets(targets_dict, k=10):
-    """Build `k` train/test target dicts from a target_dict."""
-    train_targets_dicts = [{} for i in xrange(k)]
-    test_targets_dicts = [{} for i in xrange(k)]
-    for target_key, set_value in targets_dict.iteritems():
-        for i, (train_cids, test_cids) in enumerate(
-                data_to_train_test(set_value.cids, k=k)):
-            train_targets_dicts[i][target_key] = SetValue(
-                set_value.name, train_cids.tolist(), set_value.description)
-            test_targets_dicts[i][target_key] = SetValue(
-                set_value.name, test_cids.tolist(), set_value.description)
-    return zip(train_targets_dicts, test_targets_dicts)
 
 
 def filter_targets_by_molnum(targets_dict, n):
@@ -307,12 +195,55 @@ def get_delta_auc_dict(d1, d2):
     return {k: (v - d2[k]) for k, v in d1.iteritems() if k in d2}
 
 
+def get_roc_prc_auc(true_false, metrics):
+    """Calculate ROC and precision-recall curves (PRC) and their AUCs.
+
+    Parameters
+    ----------
+    true_false : ndarray of int
+        Array of 1s and 0s for what should be true hits and false hits,
+        respectively.
+    metrics : ndarray of double
+        Array of metrics corresponding to positive hits.
+
+    Returns
+    -------
+    roc : 3xN array of double
+        The first two rows of the array, when plotted against each other, form
+        an ROC curve, and the third is the thresholds corresponding to each
+        point
+    auroc : float
+        Area under the ROC curve
+    prc : tuple of 2xN array of double and 1-D array of double
+        The first value in the tuple is the array with points on the PR curve.
+        The second value are thresholds which correspond to some of these
+        points (see scikit-learn documentation).
+    auroc : float
+        Area under the precision-recall curve
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        try:
+            fpr, tpr, roc_thresh = roc_curve(true_false, metrics,
+                                             drop_intermediate=True)
+        except UndefinedMetricWarning as e:
+            raise
+        auroc = get_auc(fpr, tpr)
+
+        warnings.simplefilter("error")
+        try:
+            precision, recall, prc_thresh = precision_recall_curve(
+                true_false, metrics)
+        except RuntimeWarning as e:
+            raise
+        auprc = get_auc(recall, precision)
+
+    return ((fpr, tpr, roc_thresh), auroc,
+            (recall, precision, prc_thresh), auprc)
+
+
 def get_auc(fp, tp, adjusted=False):
     """Calculate AUC from the FP and TP arrays of an ROC curve."""
-    # y = np.asarray(tp, dtype=np.double)
-    # x = np.asarray(fp, dtype=np.double)
-    # areas = (y[1:] + y[:-1]) * (x[1:] - x[:-1]) / 2.
-    # auc = np.sum(areas)
     auc_val = sk_auc(fp, tp)
     if adjusted:
         auc_val -= 0.5
