@@ -11,12 +11,12 @@ from python_utilities.io_tools import smart_open, touch_dir
 from python_utilities.parallel import Parallelizer
 from ..sea_utils.util import targets_to_dict, molecules_to_lists_dicts, \
                              mol_lists_targets_to_targets, \
-                             lists_dicts_to_molecules, dict_to_targets
-from .methods import SEASearchCVMethod
-from ..sea_utils.util import targets_to_mol_lists_targets
+                             lists_dicts_to_molecules, dict_to_targets, \
+                             targets_to_mol_lists_targets
 from .util import molecules_to_array, filter_targets_by_molnum, \
                   targets_to_array, train_test_dicts_from_mask, \
                   get_roc_prc_auc
+from .methods import SEASearchCVMethod
 
 
 class MoleculeSplitter(object):
