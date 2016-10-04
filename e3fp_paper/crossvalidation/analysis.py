@@ -8,7 +8,6 @@ import logging
 import numpy as np
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-
 from python_utilities.plotting.color_cycles import MAX_CONTRAST_COLORS
 from python_utilities.plotting.styles import LINESTYLES
 
@@ -58,7 +57,6 @@ def plot_auc_scatter(aucs_dictx, aucs_dicty, xlabel="X AUCs", ylabel="Y AUCs",
                  if k in aucs_dicty])
 
     fig = Figure(figsize=figsize, dpi=70, frameon=False)
-    canvas = FigureCanvas(fig)
     ax = fig.add_subplot(1, 1, 1)
     if ref_line:
         ax.plot([0, 1], [0, 1], linewidth=1, color="lightgrey", linestyle="--")
