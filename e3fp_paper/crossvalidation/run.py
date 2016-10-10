@@ -265,7 +265,7 @@ class FoldValidator(object):
         touch_dir(self.out_dir)
         self.input_file = input_file
         self.mask_file = os.path.join(out_dir, "train_test_mask.pkl.bz2")
-        self.results_file = os.path.join(out_dir, "results.pkl.bz2")
+        self.results_file = os.path.join(out_dir, "results.npz")
         self.target_aucs_file = os.path.join(out_dir, "target_aucs.pkl.bz2")
         self.combined_roc_file = os.path.join(out_dir, "combined_roc.pkl.bz2")
         self.combined_prc_file = os.path.join(out_dir, "combined_prc.pkl.bz2")
@@ -303,20 +303,12 @@ class FoldValidator(object):
             results = self.cv_method.test(fp_array, mol_to_fp_inds,
                                           target_mol_array, target_list,
                                           mol_list, mask=test_mask)
-            try:
-                with smart_open(self.results_file, "wb") as f:
-                    pkl.dump(results, f, pkl.HIGHEST_PROTOCOL)
-            except:  # workaround for Python 2 pickling bug
-                np.savez_compressed(self.results_file, results=results)
+            np.savez_compressed(self.results_file, results=results)
         else:
             logging.info("Loading results from file. (fold {})".format(
                 self.fold_num))
-            try:
-                with smart_open(self.results_file, "rb") as f:
-                    results = pkl.load(f)
-            except:
-                with np.load(self.results_file) as data:
-                    results = data["results"]
+            with np.load(self.results_file) as data:
+                results = data["results"]
         del mol_list, fp_array, mol_to_fp_inds
 
         logging.info(("Computing target ROC and PR curves and AUCs. "
