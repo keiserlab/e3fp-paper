@@ -233,6 +233,8 @@ class KFoldCrossValidator(object):
         if "pr" in self.return_auc_type:
             logging.info("Returned AUC is AUPRC.")
             return aucs[1]
+        elif "sum" in self.return_auc_type:
+            return sum(aucs)
         else:
             logging.info("Returned AUC is AUROC.")
             return aucs[0]
