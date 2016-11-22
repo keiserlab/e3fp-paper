@@ -25,6 +25,7 @@ from ..sea_utils.library import build_library
 from ..sea_utils.run import sea_set_search
 
 RANDOM_STATE = 42
+MIN_PVALUE_EXPONENT = math.log10(sys.float_info.epsilon * sys.float_info.min)
 
 
 class CVMethod(object):
@@ -252,7 +253,7 @@ class SEASearchCVMethod(CVMethod):
            higher than the highest -log10(`pvalue`).
         """
         if pvalue == 0.:
-            return -sys.float_info.min_10_exp + 1.  # Return greater than max.
+            return -MIN_PVALUE_EXPONENT + 1.  # Return greater than max.
         return -math.log10(pvalue)
 
 
