@@ -4,10 +4,14 @@ Author: Seth Axen
 E-mail: seth.axen@gmail.com
 """
 import os
+import glob
+import re
 import sys
 import csv
 import warnings
+import logging
 import itertools
+import cPickle as pkl
 
 import numpy as np
 from scipy.sparse import issparse, lil_matrix, csr_matrix
@@ -19,6 +23,7 @@ try:
 except ImportError:  # backwards compatibility with versions <0.17.2
     from sklearn.metrics.base import UndefinedMetricWarning
 from seacore.util.library import SetValue
+from python_utilities.io_tools import smart_open
 from ..pipeline import native_tuple_to_fprint
 from ..sea_utils.util import molecules_to_lists_dicts, \
                              targets_to_dict, \
@@ -311,6 +316,66 @@ def get_youden_index(fp, tp, return_coordinate=False):
         return youden[index], (fp[index], tp[index])
     else:
         return youden[index]
+
+
+def rocs_from_cv_dir(cv_dir, basename="combined_roc"):
+    roc_files = glob.glob(os.path.join(cv_dir, "*/combined_roc.*"))
+    roc_list = []
+    for fn in roc_files:
+        logging.debug("Opening {}...".format(fn))
+        with smart_open(fn, "rb") as f:
+            roc_list.append(pkl.load(f))
+    return roc_list
+
+
+def prcs_from_cv_dir(cv_dir):
+    prc_files = glob.glob(os.path.join(cv_dir, "*/combined_prc.*"))
+    prc_list = []
+    for fn in prc_files:
+        logging.debug("Opening {}...".format(fn))
+        with smart_open(fn, "rb") as f:
+            prc_list.append(pkl.load(f))
+    return prc_list
+
+
+def prc_roc_aucs_from_cv_dirs(cv_dirs):
+    aucs_list = []
+    for cv_dir in cv_dirs:
+        log_file = glob.glob(os.path.join(cv_dir, "log.txt"))[0]
+        with smart_open(log_file, "r") as f:
+            for line in f:
+                try:
+                    m = re.search(
+                        'Fold.*AUROC of (0\.\d+).*AUPRC of (0\.\d+)', line)
+                    aucs = float(m.group(1)), float(m.group(2))
+                    aucs_list.append(aucs)
+                except AttributeError:
+                    continue
+    aurocs, auprcs = zip(*aucs_list)
+    return aurocs, auprcs
+
+
+def target_aucs_from_cv_dirs(cv_dirs):
+    target_aurocs_dict = {}
+    target_auprcs_dict = {}
+    if isinstance(cv_dirs, str):
+        cv_dirs = [cv_dirs]
+    for cv_dir in cv_dirs:
+        log_file = glob.glob(os.path.join(cv_dir, "log.txt"))[0]
+        with smart_open(log_file, "r") as f:
+            for line in f:
+                try:
+                    m = re.search(
+                        'Target ([\w\d]+) .*AUROC of (0\.\d+).*AUPRC of (0\.\d+)', line)
+                    tid = m.group(1)
+                    aucs = float(m.group(2)), float(m.group(3))
+                    target_aurocs_dict.setdefault(tid, [])
+                    target_auprcs_dict.setdefault(tid, [])
+                    target_aurocs_dict[tid].append(aucs[0])
+                    target_auprcs_dict[tid].append(aucs[1])
+                except AttributeError:
+                    continue
+    return target_aurocs_dict, target_auprcs_dict
 
 
 def _make_cv_subdir(basedir, i):
