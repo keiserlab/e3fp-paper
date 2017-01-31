@@ -172,3 +172,93 @@ def plot_prc_curves(prc_lists, ax, names=None, colors=None, ref_val=None,
     if show_legend:
         ax.legend(legend_lines, legend_names, loc=3,
                   fontsize=fonts.legend_fontsize)
+
+
+def plot_auc_stats(repeat_aucs_list, ax, names=None, colors=None,
+                   show_legend=True, xlabel=""):
+    """Plot errorbars of AUCs.
+
+    Parameters
+    ----------
+    repeat_aucs_list : list of list of float
+        List of list of fold AUCs from bootstrapped ROC curves.
+    ax : axis
+        matplotlib axis
+    names : list of str or None, optional
+        Names of PRC sets in `prc_lists`
+    colors : list or None, optional
+        Colors to be used for PRC sets in `prc_lists`
+    show_legend : bool, optional
+        Show legend.
+    xlabel : str, optional
+        X-axis label, indicating type of AUC
+    """
+    legend_lines = []
+    ticks = np.linspace(.2, .8, len(repeat_aucs_list))
+    for i, aucs in enumerate(repeat_aucs_list):
+        color = get_from_list(colors, i)
+        name = get_from_list(names, i)
+        mean_auc, std_auc = np.mean(aucs), np.std(aucs)
+        dot = ax.errorbar(ticks[i], mean_auc, yerr=std_auc, zorder=i + 2,
+                          color=color, fmt='o')
+        legend_lines.append(dot)
+
+    ax.set_xlim(0., 1.)
+    ax.set_xlabel(xlabel)
+    if names is not None:
+        ax.set_xticks(ticks)
+        ax.set_xticklabels(legend_names, rotation=45)
+    else:
+        ax.set_xticks([])
+
+    if show_legend and names is not None:
+        ax.legend(legend_lines, names, loc=3, fontsize=fonts.legend_fontsize)
+
+
+def plot_auc_scatter(aucs_dictx, aucs_dicty, ax, colors=None, ref_line=True,
+                     xlabel="X AUCs", ylabel="Y AUCs", title=""):
+    """Make scatter plot of AUCs.
+
+    Parameters
+    ----------
+    aucs_dictx : dict
+        dict matching key to AUC Only keys common to `aucs_dicty` are used.
+    aucs_dicty : dict
+        dict matching key to AUC. Only keys common to `aucs_dictx` are used.
+    ax : axis
+        Matplotlib axis
+    colors : list or None, optional
+        Colors to be used for ROC sets in `roc_lists`
+    ref_line : bool, optional
+        Plot expected ROC curve of random classifier.
+    xlabel : str, optional
+        x-axis label
+    ylabel : str, optional
+        y-axis label
+    title : str, optional
+        Title of plot
+    """
+    data = np.array([(v, aucs_dicty[k]) for k, v in aucs_dictx.iteritems()
+                     if k in aucs_dicty], dtype=np.double)
+
+    if ref_line:
+        ax.plot([0, 1], [0, 1], linewidth=1, color="lightgrey",
+                linestyle="--", label="Random", zorder=1)
+
+    above = np.where(data[:, 1] > data[:, 0])
+    below = np.where(data[:, 1] <= data[:, 0])
+    x, y = data[above].T
+    ax.scatter(x, y, s=20, marker="o", facecolors=colors[0],
+               edgecolors='none', alpha=0.3, zorder=3)
+    x, y = data[below].T
+    ax.scatter(x, y, s=20, marker="o", facecolors=colors[1],
+               edgecolors='none', alpha=0.3, zorder=2)
+
+    min_val = np.amin(data)
+    ax_min = int(min_val * 20) / 20.0
+    ax.set_xlim(ax_min, 1.005)
+    ax.set_ylim(ax_min, 1.005)
+    ax.set_aspect('equal')
+    ax.set_xlabel(xlabel, fontsize=fonts.ax_label_fontsize)
+    ax.set_ylabel(ylabel, fontsize=fonts.ax_label_fontsize)
+    ax.set_title(title, fontsize=fonts.title_fontsize)
