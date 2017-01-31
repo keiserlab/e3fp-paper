@@ -63,24 +63,26 @@ def plot_roc_curves(roc_lists, ax, y_min=0., names=None, colors=None,
         name = get_from_list(names, i)
         aucs = [get_auc(x[0], x[1]) for x in roc_list]
         auc_rocs = sorted(zip(aucs, roc_list), reverse=True)
+        auc = auc_rocs[0][0]
         if only_best:
             line, = ax.plot(auc_rocs[0][1][0], auc_rocs[0][1][1], linewidth=1,
                             zorder=i + 2, color=color, alpha=alpha)
+            name += " ({:.4f})".format(auc)
         else:
             for j, (auc, roc) in enumerate(auc_rocs):
-                line, = ax.plot(auc_rocs[0][0], auc_rocs[0][1], linewidth=1,
+                line, = ax.plot(roc[0], roc[1], linewidth=1,
                                 zorder=i + 2, color=color, alpha=alpha)
+            name += " ({:.4f} +/- {:.4f})".format(np.mean(zip(*auc_rocs)[0]),
+                                                  np.std(zip(*auc_rocs)[0]))
         legend_lines.append(line)
-        auc = auc_rocs[0][0]
-        name += " ({:.4f})".format(auc)
         legend_names.append(name)
 
+    legend_lines = legend_lines[::-1]
     legend_names = legend_names[::-1]
-    legend_lines = legend_names[::-1]
     if ref_line:
         line, = ax.plot([0, 1], [0, 1], linewidth=1, color="lightgrey",
                         linestyle="--", label="Random", zorder=1)
-        legend_names.append(line)
+        legend_lines.append(line)
         legend_names.append("Random (0.5)")
 
     ax.set_xlim(0., 1.01)
