@@ -65,7 +65,7 @@ def plot_roc_curves(roc_lists, ax, y_min=0., names=None, colors=None,
         auc_rocs = sorted(zip(aucs, roc_list), reverse=True)
         auc = auc_rocs[0][0]
         if only_best:
-            line, = ax.plot(auc_rocs[0][1][0], auc_rocs[0][1][1], linewidth=1,
+            line, = ax.plot(auc_rocs[0][1][0], auc_rocs[0][1][1], linewidth=2,
                             zorder=i + 2, color=color, alpha=alpha)
             name += " ({:.4f})".format(auc)
         else:
@@ -142,7 +142,7 @@ def plot_prc_curves(prc_lists, ax, names=None, colors=None, ref_val=None,
         auc_prcs = sorted(zip(aucs, prc_list), reverse=True)
         auc = auc_prcs[0][0]
         if only_best:
-            line, = ax.plot(auc_prcs[0][1][0], auc_prcs[0][1][1], linewidth=1,
+            line, = ax.plot(auc_prcs[0][1][0], auc_prcs[0][1][1], linewidth=2,
                             zorder=i + 2, color=color, alpha=alpha)
             name += " ({:.4f})".format(auc)
         else:
