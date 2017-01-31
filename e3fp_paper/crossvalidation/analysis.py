@@ -34,18 +34,18 @@ def calculate_mean_fp_tp(fp_tp_dicts_iter, num_points=100000):
     return (mean_fp, mean_tp)
 
 
-def calculate_mean_auc(aucs_dicts_iter):
+def calculate_mean_aucs(aucs_dicts_iter):
     aucs_list_dict = {}
     for aucs_dict in aucs_dicts_iter:
-        for target_key, auc in aucs_dict.iteritems():
-            aucs_list_dict.setdefault(target_key, []).append(auc)
+        for target_key, aucs in aucs_dict.iteritems():
+            aucs_list_dict.setdefault(target_key, []).append(aucs)
 
     aucs_dict = {}
-    for target_key, auc_list in aucs_list_dict.iteritems():
+    for target_key, aucs_list in aucs_list_dict.iteritems():
         try:
-            aucs_dict[target_key] = np.mean(auc_list)
+            aucs_dict[target_key] = tuple(np.mean(aucs_list, axis=0))
         except:
-            aucs_dict[target_key] = 0.0
+            aucs_dict[target_key] = (0.0, 0.0)
 
     return aucs_dict
 
