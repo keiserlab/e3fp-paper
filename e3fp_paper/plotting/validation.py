@@ -92,7 +92,7 @@ def plot_roc_curves(roc_lists, ax, y_min=0., names=None, colors=None,
     ax.set_ylabel("True Positive Rate", fontsize=fonts.ax_label_fontsize)
     ax.set_title(title, fontsize=fonts.title_fontsize)
     if show_legend:
-        ax.legend(legend_lines, legend_names, loc=3,
+        ax.legend(legend_lines, legend_names, loc='lower center',
                   fontsize=fonts.legend_fontsize)
 
 
@@ -170,7 +170,7 @@ def plot_prc_curves(prc_lists, ax, names=None, colors=None, ref_val=None,
     ax.set_ylabel("Precision", fontsize=fonts.ax_label_fontsize)
     ax.set_title(title, fontsize=fonts.title_fontsize)
     if show_legend:
-        ax.legend(legend_lines, legend_names, loc=3,
+        ax.legend(legend_lines, legend_names, loc='lower left',
                   fontsize=fonts.legend_fontsize)
 
 
