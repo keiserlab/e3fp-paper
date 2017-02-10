@@ -15,7 +15,7 @@ from sklearn import svm
 from sklearn.metrics.pairwise import check_pairwise_arrays
 from sklearn.utils.extmath import safe_sparse_dot
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.naive_bayes import BernoulliNB
+from sklearn.naive_bayes import BernoulliNB, MultinomialNB
 from lasagne.layers import InputLayer, DenseLayer, DropoutLayer
 from lasagne.nonlinearities import leaky_rectify, softmax
 from nolearn.lasagne import NeuralNet, BatchIterator
@@ -593,7 +593,12 @@ class NaiveBayesCVMethod(SKLearnCVMethodBase):
 
     @staticmethod
     def create_clf(data=None):
-        return BernoulliNB(alpha=1.0, fit_prior=True)
+        if (data is None or (
+                np.issubdtype(data.dtype, np.integer) or
+                np.issubdtype(data.dtype, np.bool)) and data.max() == 1):
+            return BernoulliNB(alpha=1.0, fit_prior=True)
+        else:  # data is of float/count type
+            return MultinomialNB(alpha=1.0, fit_prior=True)
 
 
 class BalancedClassIterator(BatchIterator):
