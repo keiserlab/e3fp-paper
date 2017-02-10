@@ -24,6 +24,7 @@ except ImportError:  # backwards compatibility with versions <0.17.2
     from sklearn.metrics.base import UndefinedMetricWarning
 from seacore.util.library import SetValue
 from python_utilities.io_tools import smart_open
+from e3fp.fingerprint.db import FingerprintDatabase as DB
 from ..pipeline import native_tuple_to_fprint
 from ..sea_utils.util import molecules_to_lists_dicts, \
                              targets_to_dict, \
@@ -32,6 +33,18 @@ from ..sea_utils.util import molecules_to_lists_dicts, \
 csv.field_size_limit(sys.maxsize)
 
 OUT_CSV_EXT_DEF = ".csv.gz"
+
+
+class InputProcessor(object):
+
+    """Process fingerprint arrays before splitting."""
+
+    def __init__(self, mode):
+        if mode not in ("union", "mean", "first"):
+            raise ValueError("processing mode must be union, mean, or first.")
+
+    def process_fingerprints(self, fprint_dict):
+        return fprint_dict
 
 
 def targets_to_array(targets, mol_list, dtype=np.int8, dense=False):
@@ -52,7 +65,7 @@ def targets_to_array(targets, mol_list, dtype=np.int8, dense=False):
     return target_mol_array.tocsr(), target_list
 
 
-def molecules_to_array(molecules, mol_list, dtype=np.int8, dense=False):
+def molecules_to_array(molecules, mol_list, dense=False, processor=None):
     """Convert molecules to array or sparse matrix.
 
     Parameters
@@ -61,10 +74,10 @@ def molecules_to_array(molecules, mol_list, dtype=np.int8, dense=False):
         Molecules file or mol_list_dict.
     mol_list : list
         List of molecules, used to determine order of array.
-    dtype : type, optional
-        Numpy data type.
     dense : bool, optional
         Return dense array.
+    processor : InputProcessor, optional
+        Object that processes fingerprints before building the database.
 
     Returns
     -------
@@ -80,33 +93,33 @@ def molecules_to_array(molecules, mol_list, dtype=np.int8, dense=False):
 
     assert(set(mol_list_dict.keys()) == set(mol_list))
 
-    bit_num = native_tuple_to_fprint(
-        next(mol_list_dict.itervalues())[0]).bits
+    fprint_dict = {k: [native_tuple_to_fprint(v) for v in vs]
+                   for k, vs in mol_list_dict.iteritems()}
+    del mol_list_dict
+
+    try:
+        fprint_dict = processor.process_inputs(fprint_dict)
+    except AttributeError:
+        pass
+
     mol_indices_dict = {}
-    all_row_inds = []
-    all_col_inds = []
+    fprints_list = []
     max_ind = 0
     for k, mol_name in enumerate(mol_list):
-        native_tuples = mol_list_dict[mol_name]
-        fp_num = len(native_tuples)
+        fprints = fprint_dict[mol_name]
+        fp_num = len(fprints)
         row_inds = range(max_ind, max_ind + fp_num)
         mol_indices_dict[k] = row_inds
         max_ind += fp_num
-        row_inds, col_inds = zip(
-            *[(i, j) for i, n in itertools.izip(row_inds, native_tuples)
-              for j in native_tuple_to_indices(n)])
-        all_row_inds.extend(row_inds)
-        all_col_inds.extend(col_inds)
-    del mol_list_dict
+        fprints_list += fprints
 
+    db = DB(fp_type=fprints_list[0].__class__, level=fprints_list[0].level)
+
+    db.add_fingerprints(fprints_list)
+
+    all_fps = db.array
     if dense:
-        all_fps = np.zeros((max_ind, bit_num), dtype=dtype)
-        all_fps[(all_row_inds, all_col_inds)] = True
-    else:
-        all_fps = csr_matrix(
-            ([True] * len(all_row_inds), (all_row_inds, all_col_inds)),
-            shape=(max_ind, bit_num), dtype=dtype)
-    del all_row_inds, all_col_inds
+        all_fps = all_fps.toarray().astype(all_fps.dtype)
 
     return all_fps, mol_indices_dict
 

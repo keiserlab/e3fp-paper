@@ -111,16 +111,22 @@ class KFoldCrossValidator(object):
     """Class to perform k-fold cross-validation."""
 
     def __init__(self, k=5, splitter=MoleculeSplitter,
-                 cv_method_class=SEASearchCVMethod, parallelizer=None,
-                 out_dir=os.getcwd(), overwrite=False, return_auc_type="roc",
-                 reduce_negatives=False, fold_kwargs={}):
+                 cv_method_class=SEASearchCVMethod, input_processor=None,
+                 parallelizer=None, out_dir=os.getcwd(), overwrite=False,
+                 return_auc_type="roc", reduce_negatives=False,
+                 fold_kwargs={}):
         if isinstance(splitter, type):
             self.splitter = splitter(k)
         else:
             assert splitter.k == k
             self.splitter = splitter
         self.k = k
+        if (cv_method_class is SEASearchCVMethod and
+            input_processor is not None):
+            raise ValueError(
+                "Input processing is not (currently) compatible with SEA.")
         self.cv_method_class = cv_method_class
+        self.input_processor = input_processor
         self.overwrite = overwrite
         if parallelizer is None:
             self.parallelizer = Parallelizer(parallel_mode="serial")
@@ -156,7 +162,8 @@ class KFoldCrossValidator(object):
             else:
                 logging.info("Converting inputs to arrays.")
                 fp_array, mol_to_fp_inds = molecules_to_array(
-                    mol_list_dict, mol_list, dtype=np.byte)
+                    mol_list_dict, mol_list,
+                    processor=self.input_processor)
             target_mol_array, target_list = targets_to_array(
                 target_dict, mol_list, dtype=np.byte)
             total_imbalance = get_imbalance(target_mol_array)
