@@ -673,7 +673,6 @@ class NeuralNetCVMethod(ClassifierCVMethodBase):
 
     """Cross-validation method using a Neural Network."""
 
-    dtype = np.int32
     dense_data = True
     fit_file_ext = ".pkl"
 
