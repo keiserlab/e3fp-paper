@@ -594,9 +594,8 @@ class NaiveBayesCVMethod(SKLearnCVMethodBase):
 
     @staticmethod
     def create_clf(data=None):
-        if (data is None or (
-                np.issubdtype(data.dtype, np.integer) or
-                np.issubdtype(data.dtype, np.bool)) and data.max() == 1):
+        if (data is None or (not np.issubdtype(data.dtype, np.floating) and
+                             data.max() == 1)):
             return BernoulliNB(alpha=1.0, fit_prior=True)
         else:  # data is of float/count type
             return MultinomialNB(alpha=1.0, fit_prior=True)
