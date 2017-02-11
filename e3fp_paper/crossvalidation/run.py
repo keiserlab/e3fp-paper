@@ -18,6 +18,10 @@ from .util import molecules_to_array, filter_targets_by_molnum, \
                   get_roc_prc_auc
 from .methods import SEASearchCVMethod
 
+MASK_DTYPE = np.byte
+TARGET_MOL_DENSE_DTYPE = np.byte
+TARGET_MOL_SPARSE_DTYPE = np.bool
+
 
 class MoleculeSplitter(object):
 
@@ -31,14 +35,15 @@ class MoleculeSplitter(object):
     def get_train_test_masks(self, target_mol_arr):
         ntargets, nmols = target_mol_arr.shape
         if self.reduce_negatives and issparse(target_mol_arr):
-            target_mol_arr = target_mol_arr.toarray().astype('bool')
+            target_mol_arr = target_mol_arr.toarray().astype(
+                TARGET_MOL_SPARSE_DTYPE)
 
         kfold = KFold(n_splits=self.k, shuffle=True,
                       random_state=self.random_state)
         masks = []
         for i, (_, test) in enumerate(kfold.split(np.arange(nmols),
                                                   np.arange(nmols))):
-            mask = np.ones((ntargets, nmols), dtype=np.byte) * -1
+            mask = np.ones((ntargets, nmols), dtype=MASK_DTYPE) * -1
             mask[:, test] = 1
             if self.reduce_negatives:
                 mask = self.reduce_negatives_from_mask(mask, target_mol_arr)
@@ -52,7 +57,7 @@ class MoleculeSplitter(object):
         num_before = np.sum((mask != 0) & (target_mol_arr == 0))
         test_neg_inds = np.where(
             ~np.any(test_mask & target_mol_arr, axis=0))[0]
-        test_remove_arr = np.zeros_like(target_mol_arr, dtype='bool')
+        test_remove_arr = np.zeros_like(target_mol_arr, dtype=np.bool)
         test_remove_arr[:, test_neg_inds] = 1
         test_remove_arr[train_mask] = 0
         mask[test_remove_arr] = 0
@@ -61,7 +66,7 @@ class MoleculeSplitter(object):
         train_mask = mask == -1
         train_neg_inds = np.where(
             ~np.any(train_mask & target_mol_arr, axis=0))[0]
-        train_remove_arr = np.zeros_like(target_mol_arr, dtype='bool')
+        train_remove_arr = np.zeros_like(target_mol_arr, dtype=np.bool)
         train_remove_arr[:, train_neg_inds] = 1
         train_remove_arr[test_mask] = 0
         mask[train_remove_arr] = 0
@@ -86,12 +91,13 @@ class ByTargetMoleculeSplitter(MoleculeSplitter):
     def get_train_test_masks(self, target_mol_arr):
         ntargets, nmols = target_mol_arr.shape
         if self.reduce_negatives and issparse(target_mol_arr):
-            target_mol_arr = target_mol_arr.toarray().astype('bool')
+            target_mol_arr = target_mol_arr.toarray().astype(
+                TARGET_MOL_SPARSE_DTYPE)
 
         kfold = StratifiedKFold(n_splits=self.k, shuffle=True,
                                 random_state=self.random_state)
 
-        masks = [np.ones((ntargets, nmols), dtype=np.byte) * -1
+        masks = [np.ones((ntargets, nmols), dtype=MASK_DTYPE) * -1
                  for i in range(self.k)]
         for i in xrange(ntargets):
             y = target_mol_arr[i, :]
@@ -165,7 +171,7 @@ class KFoldCrossValidator(object):
                     mol_list_dict, mol_list,
                     processor=self.input_processor)
             target_mol_array, target_list = targets_to_array(
-                target_dict, mol_list, dtype=np.byte)
+                target_dict, mol_list, dtype=TARGET_MOL_DENSE_DTYPE)
             total_imbalance = get_imbalance(target_mol_array)
 
             if self.overwrite or not os.path.isfile(self.input_file):
@@ -296,7 +302,8 @@ class FoldValidator(object):
         del train_test_mask
 
         if issparse(target_mol_array):
-            target_mol_array = target_mol_array.toarray().astype('bool')
+            target_mol_array = target_mol_array.toarray().astype(
+                TARGET_MOL_SPARSE_DTYPE)
 
         if self.overwrite or not os.path.isfile(self.results_file):
             train_mask = np.invert(test_mask)

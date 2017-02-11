@@ -26,6 +26,7 @@ from ..sea_utils.run import sea_set_search
 
 RANDOM_STATE = 42
 MIN_PVALUE_EXPONENT = math.log10(sys.float_info.epsilon * sys.float_info.min)
+RESULTS_DTYPE = np.float64
 
 
 class CVMethod(object):
@@ -214,7 +215,7 @@ class SEASearchCVMethod(CVMethod):
             self.test_molecules_file)
 
         results = np.ones(shape=(len(target_list), len(mol_list)),
-                          dtype=np.float64) * self.default_pred
+                          dtype=RESULTS_DTYPE) * self.default_pred
         mol_inds = {x: i for i, x in enumerate(mol_list)}
         target_inds = {x: i for i, x in enumerate(target_list)}
 
@@ -458,7 +459,7 @@ class ClassifierCVMethodBase(CVMethod):
         target_num = len(target_list)
         mol_num = len(mol_list)
         results = np.ones(shape=(target_num, mol_num),
-                          dtype=np.float64) * self.default_pred
+                          dtype=RESULTS_DTYPE) * self.default_pred
 
         for i, target_key in enumerate(target_list):
             fit_file = self._fit_file_from_target_key(target_key)
