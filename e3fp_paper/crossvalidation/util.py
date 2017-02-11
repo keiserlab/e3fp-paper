@@ -171,34 +171,6 @@ def train_test_dicts_from_mask(mol_list_dict, mol_list, target_dict,
             test_mol_list_dict, test_target_dict)
 
 
-def save_fprints_arr(fn, arr, mol_indices=None):
-    """Save sparse array to file."""
-    if not issparse(arr):
-        arr = csr_matrix(arr)
-    kwargs = {"dtype": [arr.dtype], "indices": arr.indices,
-              "indptr": arr.indptr, "shape": arr.shape,
-              "ndata": [len(arr.data)], "mol_indices": [mol_indices]}
-    np.savez(fn, **kwargs)
-
-
-def load_fprints_arr(fn, dense=False):
-    """Load sparse array from file."""
-    with np.load(fn) as f:
-        dtype = f["dtype"][0]
-        ndata = f["ndata"][0]
-        indices = f["indices"]
-        indptr = f["indptr"]
-        shape = f["shape"]
-        mol_indices = f["mol_indices"][0]
-        data = np.ones(ndata, dtype=dtype)
-        if dense:
-            return (csr_matrix((data, indices, indptr),
-                               shape=shape).toarray(), mol_indices)
-        else:
-            return (csr_matrix((data, indices, indptr), shape=shape),
-                    mol_indices)
-
-
 def filter_targets_by_molnum(targets_dict, n):
     """Return targets that have at least `n` binders."""
     return dict([(k, v) for k, v in targets_dict.iteritems()
