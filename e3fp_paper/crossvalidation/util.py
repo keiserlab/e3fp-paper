@@ -12,6 +12,7 @@ import warnings
 import logging
 import itertools
 import cPickle as pkl
+import copy
 
 import numpy as np
 from scipy.sparse import issparse, lil_matrix, csr_matrix
@@ -24,6 +25,7 @@ except ImportError:  # backwards compatibility with versions <0.17.2
     from sklearn.metrics.base import UndefinedMetricWarning
 from seacore.util.library import SetValue
 from python_utilities.io_tools import smart_open
+import e3fp.fingerprint.fprint as fp
 from e3fp.fingerprint.db import FingerprintDatabase as DB
 from ..pipeline import native_tuple_to_fprint
 from ..sea_utils.util import molecules_to_lists_dicts, \
@@ -42,9 +44,29 @@ class InputProcessor(object):
     def __init__(self, mode):
         if mode not in ("union", "mean", "first"):
             raise ValueError("processing mode must be union, mean, or first.")
+        self.mode = mode
 
     def process_fingerprints(self, fprint_dict):
-        return fprint_dict
+        new_fprint_dict = {}
+        if self.mode == "union":
+            for mol_name, fprints in fprint_dict.iteritems():
+                new_fprint_dict[mol_name] = [
+                    fp.Fingerprint.from_fingerprint(fp.add(*fprints))]
+                new_fprint_dict[mol_name][0].name = mol_name
+        elif self.mode == "mean":
+            for mol_name, fprints in fprint_dict.iteritems():
+                new_fprint_dict[mol_name] = [fp.mean(*fprints)]
+                new_fprint_dict[mol_name][0].name = mol_name
+        elif self.mode == "first":
+            new_fprint_dict = {}
+            for mol_name, fprints in fprint_dict.iteritems():
+                new_fprint_dict[mol_name] = []
+                for proto_name, proto_fprints in itertools.groupby(
+                        fprints, key=lambda x: x.name.split('_')[0]):
+                    first_fprint = copy.deepcopy(list(proto_fprints)[0])
+                    first_fprint.name = proto_name
+                    new_fprint_dict[mol_name].append(first_fprint)
+        return new_fprint_dict
 
 
 def targets_to_array(targets, mol_list, dtype=np.int8, dense=False):
