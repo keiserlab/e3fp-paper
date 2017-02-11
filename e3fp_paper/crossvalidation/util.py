@@ -120,7 +120,7 @@ def molecules_to_array(molecules, mol_list, dense=False, processor=None):
     del mol_list_dict
 
     try:
-        fprint_dict = processor.process_inputs(fprint_dict)
+        fprint_dict = processor.process_fingerprints(fprint_dict)
     except AttributeError:
         pass
 
