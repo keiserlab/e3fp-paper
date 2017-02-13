@@ -3,32 +3,86 @@
 Author: Seth Axen
 E-mail: seth.axen@gmail.com
 """
+import csv
 from collections import OrderedDict
 
 import scipy as sc
 import numpy as np
 import pandas as pd
+from .defaults import DefaultFonts
+
+fonts = DefaultFonts()
 
 
-def results_df_from_files(files_dict, name_map):
-    df_dict = {}
-    for target, fs in files_dict.items():
-        df_dict[target] = pd.concat(
-            [pd.DataFrame.from_csv(x, sep="\t") for x in fs],
-            keys=fs, axis=1)
+def _replace_substring(string, name_map):
+    """Replace first instance of substring that appears in map with value."""
+    for x in name_map:
+        if x == string or x in string:
+            return string.replace(x, name_map[x])
+    return string
 
-    targets, dfs = zip(*sorted(df_dict.items()))
-    df = pd.concat(dfs, axis=1, keys=targets,
-                   names=['target', 'file', 'compound'])
-    mol_names = df.columns.levels[-1]
-    mol_name_reformat_map = {k: str(k).split(".")[0].split(" #")[0]
-                             for k in mol_names}
-    mol_name_reformat_map = {k: name_map.get(v, v)
-                             for k, v in mol_name_reformat_map.items()}
 
-    df.rename(columns=mol_name_reformat_map, inplace=True)
-    df = df.convert_objects(convert_numeric=True)
-    df.sort_index(axis=1, inplace=True)
+def data_df_from_file(fn, name_map={}):
+    """Build dataframe of data points from file exported from Prism.
+
+    Parameters
+    ----------
+    fn : str
+        Filename
+    name_map : dict, optional
+        Dict mapping a column name to a replacement
+
+    Returns
+    -------
+    Pandas DataFrame
+        Dataframe of data
+    """
+    df = pd.DataFrame.from_csv(fn, sep="\t")
+    df.replace(to_replace=r"\d+\*", value=pd.np.nan, regex=True, inplace=True)
+    df.dropna(axis=1, how='all', inplace=True)
+    df.columns = [str(x).split(".")[0] for x in df.columns]
+    df.columns = [_replace_substring(x, name_map=name_map) for x in df.columns]
+    return df.apply(pd.to_numeric, errors='ignore')
+
+
+def fit_df_from_file(fn, name_map={}):
+    """Build dataframe of fit statistics from file exported from Prism.
+
+    Parameters
+    ----------
+    fn : str
+        Filename
+    name_map : dict, optional
+        Dict mapping a column name to a replacement
+
+    Returns
+    -------
+    Pandas DataFrame
+        Dataframe of fit statistics
+    str
+        Type of experiment
+    """
+    data = {}
+    with open(fn, "rb") as f:
+        section_name = None
+        col_names = None
+        for i, row in enumerate(csv.reader(f, delimiter="\t")):
+            if i == 0:
+                col_names = list(row)
+                col_names[0] = "Name"
+                continue
+            elif all([len(x) == 0 for x in row[1:]]):
+                section_name = row[0]
+            else:
+                for col, val in zip(col_names, row):
+                    data.setdefault(col, []).append(
+                        val.strip().split("= ")[-1])
+                data.setdefault("Section", []).append(section_name)
+    df = pd.DataFrame(data=data, columns=['Section'] + col_names)
+    df.set_index(['Section', 'Name'], inplace=True)
+    df.columns = [_replace_substring(x, name_map=name_map) for x in df.columns]
+    df.loc["Best-fit values"] = [pd.to_numeric(x) for x
+                                 in df.loc["Best-fit values"].values]
     return df
 
 
@@ -100,100 +154,129 @@ def binding_curve_logKi(logD, top, bottom, logKi, radioligandNM, hotKdNM):
     return bottom + (top - bottom) / (1 + 10**(logD - logEC50))
 
 
-def normalize(val, min_val, max_val, mult=1.):
+def get_normalized(val, min_val, max_val, mult=100.):
     """Normalize a value to be between 0 and `mult`."""
     return mult * (val - min_val) / (max_val - min_val)
 
 
-def plot_results_df(df, ax, colors_dict, fit_df, ref_col=None,
-                    fit_type="logIC50", norm=False, as_perc=False, title="",
-                    num_fit_points=1000):
-    """Plot all results from a set of experiments with or without controls.
+def plot_experiments(data_df, ax, fit_df=None, colors_dict={},
+                     num_fit_points=1000, invert=True, normalize=False,
+                     title=""):
+    """Plot all results from a set of experiments.
 
     Parameters
     ----------
-    df : Pandas DataFrame
+    data_df : Pandas DataFrame
         Dataframe where row name corresponds to log concentration, and column
         index corresponds to compound name. Where multiple columns have the
         same name, column values are averaged and error bars are shown.
     ax : Axis
         Axis of matplotlib figure on which to plot curves
-    colors_dict : dict
-        dict matching compound name to color
     fit_df : Pandas DataFrame
         Dataframe containing parameters of curve fit to data.
-    ref_col : str, optional
-        Column name of reference compound/control.
-    fit_type : str, optional
-        Type of fit that was performed. Valid options are 'logIC50' and
-        'logKi'.
-    norm : bool, optional
-        Normalize curves to between 0 and 100. Set to false if binding has
-        already been normalized to this range.
-    as_perc : bool, optional
-        Plot values as percent binding of unlabeled compound. Vertically flips
-        curves by subtracting them by 100.
-    title : str, optional
-        Description
+    colors_dict : dict
+        dict matching compound name to color
     num_fit_points : int, optional
         Description
+    invert : bool, optional
+        Invert curve by subtracting from 100.
+    normalize : bool, optional
+        Normalize curves to between 0 and 100. Set to false if binding has
+        already been normalized to this range.
+    title : str, optional
+        Description
     """
-    cols = list(OrderedDict.fromkeys(df.columns))
-
+    cols = list(OrderedDict.fromkeys(data_df.columns))
+    logd_min = min(data_df.index)
+    logd_max = max(data_df.index)
+    fit_logds = np.linspace(logd_min, logd_max, num_fit_points)
+    dots = []
+    labels = []
+    max_val = data_df.max()
+    min_val = data_df.min()
+    max_plot_vals = []
+    min_plot_vals = []
     for i, col in enumerate(cols):
-        col_df = df.loc[:, col].dropna(axis=0, how='all')
-        num_cols = df.columns.size
-        ys = np.concatenate(np.atleast_2d(np.array(col_df).T))
-        real_inds = np.where(~np.isnan(ys))
-        ys = ys[real_inds]
-        logds = np.concatenate([col_df.index for x in col_df])[real_inds]
+        label = col
+        color = colors_dict.get(col.split(' ')[0], "k")
+        col_df = data_df.loc[:, col].dropna(axis=0, how='all')
+        logds = np.asarray(col_df.index)
 
-        if num_cols > 1:
-            means = col_df.mean(axis=1, skipna=True)
-            stds = sc.stats.sem(col_df, axis=1, nan_policy='omit')
-        else:
-            means = ys
+        if fit_df is not None and col in fit_df.columns:
+            col_fit_df = fit_df[col]
+            top = col_fit_df.loc['Top']
+            bottom = col_fit_df.loc['Bottom']
+            max_val = top
+            min_val = bottom
+
+            try:
+                logIC50 = col_fit_df.loc['LogIC50']
+                fit = binding_curve_logIC50(fit_logds, top, bottom,
+                                            col_fit_df.loc["LogIC50"])
+                label = r"{} ($\log{{IC_{{50}}}}$: {:.2f})".format(label,
+                                                                   logIC50)
+            except KeyError:  # different type of curve fit
+                fit = binding_curve_logKi(fit_logds, top, bottom,
+                                          col_fit_df.loc["logKi"],
+                                          col_fit_df.loc["HotNM"],
+                                          col_fit_df.loc["HotKdNM"])
+                logKi = col_fit_df.loc['logKi']
+                label = r"{} ($\log{{K_i}}$: {:.2f})".format(label, logKi)
+
+            if normalize:
+                fit = get_normalized(fit, min_val, max_val)
+
+            if invert:
+                fit = 100 - fit
+
+            max_plot_vals.append(fit.max())
+            min_plot_vals.append(fit.min())
+
+            ax.plot(fit_logds, fit, color=color, linewidth=1, zorder=2 * i + 1)
+
+        if col_df.ndim < 2:
+            means = np.asarray(col_df)
             stds = np.zeros_like(means)
+        else:
+            means = np.asarray(col_df.mean(axis=1, skipna=True))
+            stds = np.asarray(sc.stats.sem(col_df, axis=1, nan_policy='omit'))
 
-        top, bottom = fit_df.loc[col]['Top'], fit_df.loc[col]['Bottom']
-        if norm:
-            means = normalize(means, bottom, top, mult=100.)
-            stds = normalize(stds, bottom, top, mult=100.)
-        if as_perc:
+        if normalize:
+            means = get_normalized(means, min_val, max_val)
+            stds = get_normalized(stds, 0, max_val - min_val)
+
+        if invert:
             means = 100 - means
 
-        color = colors_dict.get(col, "k")
-        logds = np.linspace(min(df.index), max(df.index), num_fit_points)
-        label = col
-        if fit_type == "logIC50":
-            logIC50 = fit_df.loc[col]['logIC50']
-            curve_fit = binding_curve_logIC50(logds, top, bottom, logIC50)
-            label += " (logIC50: {:.2f})".format(logIC50)
-        else:  # logKi
-            logKi = fit_df.loc[col]['logKi']
-            curve_fit = binding_curve_logKi(logds, top, bottom, logKi,
-                                            fit_df.loc[col]['HotNM'],
-                                            fit_df.loc[col]['HotKdNM'])
-            label += " (logKi: {:.2f})".format(logKi)
+        max_plot_vals.append((means + stds).max())
+        min_plot_vals.append((means - stds).min())
 
-        ax.errorbar(col_df.index, means, yerr=stds, color=color, capsize=2)
-        ax.scatter(col_df.index, means, marker='o', s=25, color=color,
-                   label=label)
+        ax.errorbar(logds, means, yerr=stds, fmt='none', ecolor=color,
+                    capsize=2, zorder=2 * i)
+        marker = 'o'
+        if '#2' in col:
+            marker = '^'
+        dot = ax.scatter(logds, means, s=20, marker=marker, c=color, label=col,
+                         zorder=2 * i + 1)
+        dots.append(dot)
 
-        if norm:
-            curve_fit = normalize(curve_fit, bottom, top, mult=100.)
-        if as_perc:
-            curve_fit = 100 - curve_fit
-        ax.plot(logds, curve_fit, color=color, linewidth=1.5)
+        labels.append(label)
 
-    ax.legend(loc=2, fontsize=10, borderaxespad=-1)
-    ax.set_xlim(min(df.index) - .5, max(df.index) + .5)
-    ax.set_xlabel(r"log[Compound] (M)")
-    ax.set_ylabel(r"Competitive Binding")
-    # ax.set_yticks([0., 0.5, 1.])
-    # ax.set_yticklabels(['0', '50', '100'])
-    # ax.set_ylim(-.35, 1.15)
-    ax.set_title(title)
-    return ax
+    max_plot_val = max(max_plot_vals + [100])
+    min_plot_val = min(min_plot_vals + [0])
+    if invert:
+        legend_loc = 'upper left'
+        ax.set_ylim(min_plot_val - 5, max_plot_val + 10 * len(cols))
+    else:
+        legend_loc = 'lower left'
+        ax.set_ylim(min_plot_val - 5 * len(cols), max_plot_val + 10)
 
-
+    ax.legend(dots, labels, loc=legend_loc,
+              fontsize=fonts.legend_fontsize - 1, borderaxespad=-1,
+              handletextpad=-.5)
+    ax.set_xlim(logd_min - .5, logd_max + .5)
+    ax.set_xlabel(r"$\log{{\left[Drug\right]}}$ (M)",
+                  fontsize=fonts.ax_label_fontsize)
+    ax.set_ylabel(r"Specific Binding (%)", fontsize=fonts.ax_label_fontsize)
+    ax.set_yticks(np.linspace(0, 100, 6))
+    ax.set_title(title, fontsize=fonts.title_fontsize)
