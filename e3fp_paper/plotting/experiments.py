@@ -309,4 +309,4 @@ def plot_experiments(data_df, ax, fit_df=None, colors_dict={},
                   fontsize=fonts.ax_label_fontsize)
     ax.set_ylabel(r"Specific Binding (%)", fontsize=fonts.ax_label_fontsize)
     ax.set_yticks(np.linspace(0, 100, 6))
-    ax.set_title(title, fontsize=fonts.title_fontsize)
+    ax.set_title(title, fontsize=fonts.title_fontsize, y=1.03)
