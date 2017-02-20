@@ -154,6 +154,36 @@ def binding_curve_logKi(logD, top, bottom, logKi, radioligandNM, hotKdNM):
     return bottom + (top - bottom) / (1 + 10**(logD - logEC50))
 
 
+def agonist_curve(logD, top, bottom, logEC50, hill_slope=1.):
+    """Compute the log[dose]-response curve when agonist logEC50 is fit.
+
+    Parameters
+    ----------
+    logD : float or iterable of float
+        Log concentration of agonist dose
+    top : float
+        Upper plateau of curve corresponding to maximum response
+    bottom : float
+        Lower plateau of curve corresponding to minimum response
+    logEC50 : float
+        Concentration of agonist corresponding to half-maximal response
+    hill_slope : float
+        Slope of dose-response curve, defaults to 1.0.
+
+    Returns
+    -------
+    float or iterable of float
+        Response at log agonist concentrations of `logD`
+
+    References
+    ----------
+    https://www.graphpad.com/guides/prism/5/user-guide/prism5help.html?reg_one_site_competition_ic50.htm
+
+    """
+    logD = np.asarray(logD)
+    return bottom + (top - bottom) / (1 + 10**((logEC50 - logD) * hill_slope))
+
+
 def get_normalized(val, min_val, max_val, mult=100.):
     """Normalize a value to be between 0 and `mult`."""
     return mult * (val - min_val) / (max_val - min_val)
