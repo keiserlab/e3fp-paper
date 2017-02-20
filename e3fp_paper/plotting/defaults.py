@@ -42,9 +42,9 @@ class DefaultColors(object):
     @property
     def mol_colors(self):
         """Get colors for molecules."""
-        return {'Alphaprodine': (0.298, 0.447, 0.690),
-                'Anpirtoline': (0.769, 0.306, 0.322),
-                'Cypenamine': (0.333, 0.659, 0.408)}
+        return {'Alphaprodine': (0.216, 0.495, 0.720),
+                'Anpirtoline': (0.894, 0.102, 0.110),
+                'Cypenamine': (0.304, 0.683, 0.293)}
 
 
 class DefaultFonts(object):
