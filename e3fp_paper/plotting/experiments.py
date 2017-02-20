@@ -3,6 +3,7 @@
 Author: Seth Axen
 E-mail: seth.axen@gmail.com
 """
+import itertools
 import csv
 from collections import OrderedDict
 
@@ -214,9 +215,10 @@ def plot_experiments(data_df, ax, fit_df=None, colors_dict={},
         Normalize curves to between 0 and 100. Set to false if binding has
         already been normalized to this range.
     title : str, optional
-        Description
+        Title of subplot
     """
     cols = list(OrderedDict.fromkeys(data_df.columns))
+    marker_iter = itertools.cycle(('s', '^', 'D', 'v'))
     logd_min = min(data_df.index)
     logd_max = max(data_df.index)
     fit_logds = np.linspace(logd_min, logd_max, num_fit_points)
@@ -228,7 +230,13 @@ def plot_experiments(data_df, ax, fit_df=None, colors_dict={},
     min_plot_vals = []
     for i, col in enumerate(cols):
         label = col
-        color = colors_dict.get(col.split(' ')[0], "k")
+        mol_name = col.split(' ')[0]
+        if mol_name in colors_dict:
+            color = colors_dict[mol_name]
+            is_ref = False
+        else:
+            color = 'k'
+            is_ref = True
         col_df = data_df.loc[:, col].dropna(axis=0, how='all')
         logds = np.asarray(col_df.index)
 
@@ -262,7 +270,8 @@ def plot_experiments(data_df, ax, fit_df=None, colors_dict={},
             max_plot_vals.append(fit.max())
             min_plot_vals.append(fit.min())
 
-            ax.plot(fit_logds, fit, color=color, linewidth=1, zorder=2 * i + 1)
+            ax.plot(fit_logds, fit, color=color, linewidth=1.5,
+                    zorder=2 * i + 1)
 
         if col_df.ndim < 2:
             means = np.asarray(col_df)
@@ -281,13 +290,20 @@ def plot_experiments(data_df, ax, fit_df=None, colors_dict={},
         max_plot_vals.append((means + stds).max())
         min_plot_vals.append((means - stds).min())
 
-        ax.errorbar(logds, means, yerr=stds, fmt='none', ecolor=color,
-                    capsize=2, zorder=2 * i)
-        marker = 'o'
-        if '#2' in col:
-            marker = '^'
-        dot = ax.scatter(logds, means, s=20, marker=marker, c=color, label=col,
-                         zorder=2 * i + 1)
+        error_inds = (stds > 0.)
+        (_, caps, _) = ax.errorbar(logds[error_inds], means[error_inds],
+                                   yerr=stds[error_inds], fmt='none',
+                                   ecolor=color, capsize=2, linewidth=1,
+                                   alpha=.9, zorder=2 * i)
+        for cap in caps:
+            cap.set_markeredgewidth(1)
+
+        if is_ref:
+            marker = 'o'
+        else:
+            marker = next(marker_iter)
+        dot = ax.scatter(logds, means, s=20, lw=0, marker=marker, c=color,
+                         label=col, zorder=2 * i + 1)
         dots.append(dot)
 
         labels.append(label)
