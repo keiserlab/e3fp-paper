@@ -730,7 +730,10 @@ class NeuralNetCVMethod(ClassifierCVMethodBase):
 
     def load_fit_file(self, fit_file):
         """Load target fit from file."""
-        clf = self.create_clf()
+        with smart_open(fit_file, "rb") as f:
+            fit = pkl.load(f)
+        first_weights = fit['hidden'][0]
+        clf = self.create_clf(data=first_weights.T)
         clf.load_params_from(fit_file)
         return clf
 
