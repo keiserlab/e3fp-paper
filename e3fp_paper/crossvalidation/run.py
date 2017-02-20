@@ -441,7 +441,7 @@ class FoldValidator(object):
         if not os.path.isfile(self.mask_file):
             return False
 
-        if not isinstance(self.cv_method, SEASearchCVMethod):
+        if isinstance(self.cv_method, SEASearchCVMethod):
             test_molecules_file = os.path.join(self.out_dir,
                                                "test_molecules.csv.bz2")
             test_targets_file = os.path.join(self.out_dir,

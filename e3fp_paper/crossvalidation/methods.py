@@ -679,12 +679,16 @@ class NeuralNetCVMethod(ClassifierCVMethodBase):
     @staticmethod
     def create_clf(data=None):
         """Create neural network."""
+        try:
+            bits = data.shape[1]
+        except AttributeError:
+            bits = 1024
         net_params = {"layers": [("input", InputLayer),
                                  ("inputdrop", DropoutLayer),
                                  ("hidden", DenseLayer),
                                  ("hiddendrop", DropoutLayer),
                                  ("output", DenseLayer)],
-                      "input_shape": (None, 1024),
+                      "input_shape": (None, bits),
                       "inputdrop_p": .1,
                       "hidden_num_units": 512,
                       "hidden_nonlinearity": leaky_rectify,
@@ -707,7 +711,7 @@ class NeuralNetCVMethod(ClassifierCVMethodBase):
     @staticmethod
     def train_clf(clf, data, result, batch_size=None):
         """Train neural network with data and result."""
-        return clf.fit(data, result)
+        return clf.fit(data, result.astype(np.int32))
 
     @staticmethod
     def score_clf(clf, data, result):
@@ -726,7 +730,10 @@ class NeuralNetCVMethod(ClassifierCVMethodBase):
 
     def load_fit_file(self, fit_file):
         """Load target fit from file."""
-        clf = self.create_clf()
+        with smart_open(fit_file, "rb") as f:
+            fit = pkl.load(f)
+        first_weights = fit['hidden'][0]
+        clf = self.create_clf(data=first_weights.T)
         clf.load_params_from(fit_file)
         return clf
 
