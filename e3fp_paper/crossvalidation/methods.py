@@ -711,7 +711,7 @@ class NeuralNetCVMethod(ClassifierCVMethodBase):
     @staticmethod
     def train_clf(clf, data, result, batch_size=None):
         """Train neural network with data and result."""
-        return clf.fit(data, result)
+        return clf.fit(data, result.astype(np.int32))
 
     @staticmethod
     def score_clf(clf, data, result):
