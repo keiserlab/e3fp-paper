@@ -35,27 +35,44 @@ from ..sea_utils.util import molecules_to_lists_dicts, \
 csv.field_size_limit(sys.maxsize)
 
 OUT_CSV_EXT_DEF = ".csv.gz"
-
+KT = 0.592 #  kcal/mol
 
 class InputProcessor(object):
 
     """Process fingerprint arrays before splitting."""
 
-    def __init__(self, mode):
-        if mode not in ("union", "mean", "first"):
-            raise ValueError("processing mode must be union, mean, or first.")
+    def __init__(self, mode, energies_file=None):
+        if mode not in ("union", "mean", "mean-boltzmann", "first"):
+            raise ValueError("processing mode must be union, mean, "
+                             "mean-boltzmann, or first.")
         self.mode = mode
+        self.energies_file = energies_file
+        if mode == "mean-boltzmann" and energies_file is None:
+            raise ValueError("'energies_file' must be specified if mode "
+                             "mean-boltzmann is provided.")
 
     def process_fingerprints(self, fprint_dict):
         new_fprint_dict = {}
         if self.mode == "union":
             for mol_name, fprints in fprint_dict.iteritems():
                 new_fprint_dict[mol_name] = [
-                    fp.Fingerprint.from_fingerprint(fp.add(*fprints))]
+                    fp.Fingerprint.from_fingerprint(fp.add(fprints))]
                 new_fprint_dict[mol_name][0].name = mol_name
         elif self.mode == "mean":
             for mol_name, fprints in fprint_dict.iteritems():
-                new_fprint_dict[mol_name] = [fp.mean(*fprints)]
+                new_fprint_dict[mol_name] = [fp.mean(fprints)]
+                new_fprint_dict[mol_name][0].name = mol_name
+        elif self.mode == "mean-boltzmann":
+            energies_dict = {}
+            with smart_open(self.energies_file, "r") as f:
+                for line in f:
+                    name, energy = line.rstrip().split('\t')
+                    energies_dict[name] = float(energy)
+            for mol_name, fprints in fprint_dict.iteritems():
+                energies = np.array([energies_dict[fprint.name]
+                                     for fprint in fprints])
+                probs = np.exp(-energies / KT)
+                new_fprint_dict[mol_name] = [fp.mean(fprints, weights=probs)]
                 new_fprint_dict[mol_name][0].name = mol_name
         elif self.mode == "first":
             new_fprint_dict = {}
