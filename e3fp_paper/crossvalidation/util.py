@@ -72,7 +72,14 @@ class InputProcessor(object):
                 energies = np.array([energies_dict[fprint.name]
                                      for fprint in fprints])
                 probs = np.exp(-energies / KT)
-                new_fprint_dict[mol_name] = [fp.mean(fprints, weights=probs)]
+                if np.sum(probs) == 0.:
+                    logging.warning(
+                        ("Boltzmann probabilities for {} sum to 0. Using "
+                         "unweighted mean.").format(mol_name))
+                    new_fprint_dict[mol_name] = [fp.mean(fprints)]
+                else:
+                    new_fprint_dict[mol_name] = [fp.mean(fprints,
+                                                         weights=probs)]
                 new_fprint_dict[mol_name][0].name = mol_name
         elif self.mode == "first":
             new_fprint_dict = {}
