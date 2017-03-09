@@ -1,6 +1,6 @@
-# Generated 01/14/17 17:57:39
-# fit: MU chisq: 39.6609 r2: 0.999828
-# fit: SIGMA chisq: 21.7342 r2: 0.971185
-TANI	0.2
-MU	0.000186859	1	0
-SIGMA	0.00225582	0.621308	0
+# Generated 03/08/17 10:42:13
+# fit: MU chisq: 37.2063 r2: 0.999905
+# fit: SIGMA chisq: 20.5686 r2: 0.986195
+TANI    0.2
+MU  0.000291296 1   0
+SIGMA   0.00271972  0.625565    0
