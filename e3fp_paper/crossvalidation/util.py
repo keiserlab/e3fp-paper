@@ -35,7 +35,8 @@ from ..sea_utils.util import molecules_to_lists_dicts, \
 csv.field_size_limit(sys.maxsize)
 
 OUT_CSV_EXT_DEF = ".csv.gz"
-KT = 0.592 #  kcal/mol
+KT = 0.592  # kcal/mol
+
 
 class InputProcessor(object):
 
@@ -71,13 +72,21 @@ class InputProcessor(object):
             for mol_name, fprints in fprint_dict.iteritems():
                 energies = np.array([energies_dict[fprint.name]
                                      for fprint in fprints])
-                probs = np.exp(-energies / KT)
-                if np.sum(probs) == 0.:
+                # factor out max term to reduce overflow
+                e_min = energies.min()
+                adjusted_energies = energies - e_min
+                probs = np.exp(-adjusted_energies / KT)
+                prob_sum = np.sum(probs)
+                if prob_sum == 0.:
                     logging.warning(
                         ("Boltzmann probabilities for {} sum to 0. Using "
                          "unweighted mean.").format(mol_name))
                     new_fprint_dict[mol_name] = [fp.mean(fprints)]
                 else:
+                    if prob_sum == 1. and probs.shape[0] > 1:
+                        logging.info(
+                            ("Boltzmann probabilities for {} dominated by 1 "
+                             "term.").format(mol_name))
                     new_fprint_dict[mol_name] = [fp.mean(fprints,
                                                          weights=probs)]
                 new_fprint_dict[mol_name][0].name = mol_name
