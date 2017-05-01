@@ -148,7 +148,6 @@ def binding_curve_logKi(logD, top, bottom, logKi, radioligandNM, hotKdNM):
     References
     ----------
     https://www.graphpad.com/guides/prism/5/user-guide/prism5help.html?reg_one_site_competition_ki.htm
-
     """
     logD = np.asarray(logD)
     logEC50 = np.log10(10**logKi * (1 + radioligandNM / hotKdNM))
@@ -179,7 +178,6 @@ def agonist_curve(logD, top, bottom, logEC50, hill_slope=1.):
     References
     ----------
     https://www.graphpad.com/guides/prism/5/user-guide/prism5help.html?reg_one_site_competition_ic50.htm
-
     """
     logD = np.asarray(logD)
     return bottom + (top - bottom) / (1 + 10**((logEC50 - logD) * hill_slope))
@@ -269,16 +267,20 @@ def plot_experiments(data_df, ax, fit_df=None, colors_dict={},
     fit_logds = np.linspace(logd_min, logd_max, num_fit_points)
     dots = []
     labels = []
-    max_val = data_df.max()
-    min_val = data_df.min()
+    max_val = data_df.values.max()
+    min_val = data_df.values.min()
     max_plot_vals = []
     min_plot_vals = []
     for i, col in enumerate(cols):
         label = col
-        mol_name = col.split(' ')[0]
+        is_ref = False
+        if isinstance(col, str):
+            mol_name = str(col).split(' ')[0]
+        else:
+            is_ref = True
+            mol_name = col
         if mol_name in colors_dict:
             color = colors_dict[mol_name]
-            is_ref = False
         else:
             color = 'k'
             is_ref = True
@@ -292,19 +294,31 @@ def plot_experiments(data_df, ax, fit_df=None, colors_dict={},
             max_val = top
             min_val = bottom
 
-            try:
+            if 'LogIC50' in col_fit_df.index:
                 logIC50 = col_fit_df.loc['LogIC50']
                 fit = binding_curve_logIC50(fit_logds, top, bottom,
                                             col_fit_df.loc["LogIC50"])
                 label = r"{} ($\log{{IC_{{50}}}}$: {:.2f})".format(label,
                                                                    logIC50)
-            except KeyError:  # different type of curve fit
-                fit = binding_curve_logKi(fit_logds, top, bottom,
-                                          col_fit_df.loc["logKi"],
+            elif "logKi" in col_fit_df.index and "HotNM" in col_fit_df.index:
+                logKi = col_fit_df.loc['logKi']
+                fit = binding_curve_logKi(fit_logds, top, bottom, logKi,
                                           col_fit_df.loc["HotNM"],
                                           col_fit_df.loc["HotKdNM"])
-                logKi = col_fit_df.loc['logKi']
                 label = r"{} ($\log{{K_i}}$: {:.2f})".format(label, logKi)
+            elif ("LogEC50" in col_fit_df.index and
+                  "HillSlope" in col_fit_df.index):
+                logEC50 = col_fit_df.loc['LogEC50']
+                if "SchildSlope" in col_fit_df.index:
+                    logEC50 = logEC50 + antagonist_shift(
+                        col_fit_df.loc["B"], col_fit_df.loc["pA2"],
+                        schild_slope=col_fit_df.loc["SchildSlope"])
+                fit = agonist_curve(fit_logds, top, bottom, logEC50,
+                                    hill_slope=col_fit_df.loc["HillSlope"])
+                if label != 0:
+                    label = r"{:.0E}".format(label)
+                else:
+                    label = "0"
 
             if normalize:
                 fit = get_normalized(fit, min_val, max_val)
@@ -355,12 +369,8 @@ def plot_experiments(data_df, ax, fit_df=None, colors_dict={},
 
     max_plot_val = max(max_plot_vals + [100])
     min_plot_val = min(min_plot_vals + [0])
-    if invert:
-        legend_loc = 'upper left'
-        ax.set_ylim(min_plot_val - 5, max_plot_val + 10 * len(cols))
-    else:
-        legend_loc = 'lower left'
-        ax.set_ylim(min_plot_val - 5 * len(cols), max_plot_val + 10)
+    legend_loc = 'upper left'
+    ax.set_ylim(min_plot_val - 5, max_plot_val + 5)
 
     ax.legend(dots, labels, loc=legend_loc,
               fontsize=fonts.legend_fontsize - 1, borderaxespad=-1,
@@ -368,7 +378,6 @@ def plot_experiments(data_df, ax, fit_df=None, colors_dict={},
     ax.set_xlim(logd_min - .5, logd_max + .5)
     ax.set_xlabel(r"$\log{{\left[Drug\right]}}$ (M)",
                   fontsize=fonts.ax_label_fontsize)
-    ax.set_ylabel(r"Specific Binding (%)", fontsize=fonts.ax_label_fontsize)
     if len(ylabel) > 0:
         ax.set_ylabel(ylabel, fontsize=fonts.ax_label_fontsize)
     ax.set_yticks(np.linspace(0, 100, 6))
