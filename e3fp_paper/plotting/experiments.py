@@ -235,7 +235,7 @@ def plot_agonist_logEC50(fit_df, ax, num_fit_points=1000):
 
 def plot_experiments(data_df, ax, fit_df=None, colors_dict={},
                      num_fit_points=1000, invert=True, normalize=False,
-                     title=""):
+                     ylabel="", title=""):
     """Plot all results from a set of experiments.
 
     Parameters
@@ -257,6 +257,8 @@ def plot_experiments(data_df, ax, fit_df=None, colors_dict={},
     normalize : bool, optional
         Normalize curves to between 0 and 100. Set to false if binding has
         already been normalized to this range.
+    ylabel : str, optional
+        Label of y-axis data.
     title : str, optional
         Title of subplot
     """
@@ -367,5 +369,7 @@ def plot_experiments(data_df, ax, fit_df=None, colors_dict={},
     ax.set_xlabel(r"$\log{{\left[Drug\right]}}$ (M)",
                   fontsize=fonts.ax_label_fontsize)
     ax.set_ylabel(r"Specific Binding (%)", fontsize=fonts.ax_label_fontsize)
+    if len(ylabel) > 0:
+        ax.set_ylabel(ylabel, fontsize=fonts.ax_label_fontsize)
     ax.set_yticks(np.linspace(0, 100, 6))
     ax.set_title(title, fontsize=fonts.title_fontsize, y=1.03)
