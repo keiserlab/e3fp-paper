@@ -9,6 +9,6 @@ fonts = DefaultFonts()
 
 def add_panel_label(label, ax):
     """Add a panel label to an axis."""
-    ax.text(-.2, 1.1, label, transform=ax.transAxes,
+    ax.text(-.2, 1.12, label, transform=ax.transAxes,
             fontsize=fonts.panel_label_fontsize, fontweight='bold', va='top',
             ha='right')
