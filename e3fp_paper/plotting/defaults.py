@@ -24,29 +24,15 @@ class DefaultColors(object):
     """Default colors for plotting."""
 
     def __init__(self):
-        pass
-
-    def get_e3fp_ecfp_colors(self, n=2, reverse=False):
-        """Get colors for E3FP...N-2 2d-like variants...ECFP."""
-        return sns.cubehelix_palette(n, start=1.0, rot=.1, dark=0, light=.75,
-                                     hue=2.5, reverse=reverse)
-
-    @property
-    def e3fp_color(self):
-        """Get color for E3FP."""
-        return self.get_e3fp_ecfp_colors(n=1)
-
-    @property
-    def ecfp_color(self):
-        """Get color for ECFP."""
-        return self.get_e3fp_ecfp_colors(n=1, reverse=True)
-
-    @property
-    def mol_colors(self):
-        """Get colors for molecules."""
-        return {'Alphaprodine': (0.216, 0.495, 0.720),
-                'Anpirtoline': (0.894, 0.102, 0.110),
-                'Cypenamine': (0.304, 0.683, 0.293)}
+        self.ecfp_color = (0, 0, 0)
+        self.ecfp_chiral_color = (.39, .49, .39)
+        self.e2fp_color = (.12, .47, .71)
+        self.e2fp_stereo_color = (.2, .63, .17)
+        self.e3fp_nostereo_color = (.94, .35, .35)
+        self.e3fp_color = (1, .6, .18)
+        self.mol_colors = {'Alphaprodine': (0.216, 0.495, 0.720),
+                           'Anpirtoline': (0.894, 0.102, 0.110),
+                           'Cypenamine': (0.304, 0.683, 0.293)}
 
 
 class DefaultFonts(object):
