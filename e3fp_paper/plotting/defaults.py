@@ -44,4 +44,4 @@ class DefaultFonts(object):
         self.title_fontsize = 14
         self.ax_label_fontsize = 12
         self.ax_ticks_fontsize = 10
-        self.legend_fontsize = 10
+        self.legend_fontsize = 8
