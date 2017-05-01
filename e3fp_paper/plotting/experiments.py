@@ -185,9 +185,52 @@ def agonist_curve(logD, top, bottom, logEC50, hill_slope=1.):
     return bottom + (top - bottom) / (1 + 10**((logEC50 - logD) * hill_slope))
 
 
+def antagonist_shift(B, pA2, schild_slope=1.):
+    """Compute the shift to agonist logEC50, logEC90, etc. with antagonist.
+
+    Parameters
+    ----------
+    B : float
+        Concentration of antagonist
+    pA2 : float
+        -log agonist concentration needed to shift curve by factor of 2
+    schild_slope : float, optional
+        Slope of Schild plot, defaults to 1.0
+
+    Returns
+    -------
+    float or iterable of float
+        Change in log equiactive agonist concentration at antagonist
+        concentration
+
+    References
+    ----------
+    http://www.graphpad.com/guides/prism/7/curve-fitting/index.htm?reg_gaddumschild.htm
+    """
+    return np.log10(1 + (B / (10**(-pA2)))**schild_slope)
+
+
 def get_normalized(val, min_val, max_val, mult=100.):
     """Normalize a value to be between 0 and `mult`."""
     return mult * (val - min_val) / (max_val - min_val)
+
+
+def plot_agonist_logEC50(fit_df, ax, num_fit_points=1000):
+    Bs = fit_df.loc["B"]
+    fit_logBs = np.linspace(np.log10(Bs[1]) - 1, np.log10(Bs.max()),
+                            num_fit_points)
+    logEC50 = fit_df.loc["LogEC50"][0]
+    pA2 = fit_df.loc["pA2"][0]
+    schild_slope = fit_df.loc["SchildSlope"][0]
+    fitEC50s = logEC50 + antagonist_shift(10**fit_logBs, pA2,
+                                          schild_slope=schild_slope)
+    fitEC50s = logEC50 / fitEC50s
+    ax.plot(fit_logBs, fitEC50s, color="k", linewidth=2)
+    ax.set_ylabel(r"Agonist $\log{{EC_{{50}}}}$ (M)",
+                  fontsize=fonts.ax_label_fontsize)
+    ax.set_xlabel(r"$\log{{\left[Antagonist\right]}}$ (M)",
+                  fontsize=fonts.ax_label_fontsize)
+    ax.set_xticks(np.arange(int(fit_logBs.min()), int(fit_logBs.max() + 1)))
 
 
 def plot_experiments(data_df, ax, fit_df=None, colors_dict={},
