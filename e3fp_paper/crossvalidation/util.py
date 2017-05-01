@@ -358,8 +358,12 @@ def get_youden_index(fp, tp, return_coordinate=False):
         return youden[index]
 
 
-def rocs_from_cv_dir(cv_dir, basename="combined_roc"):
-    roc_files = glob.glob(os.path.join(cv_dir, "*/combined_roc.*"))
+def rocs_from_cv_dir(cv_dir, fold=None, basename="combined_roc"):
+    if fold is None or not isinstance(fold, int):
+        fold = "*"
+    print(os.path.join(cv_dir, "{}/{}.*".format(fold, basename)))
+    roc_files = glob.glob(
+        os.path.join(cv_dir, "{}/{}.*".format(fold, basename)))
     roc_list = []
     for fn in roc_files:
         logging.debug("Opening {}...".format(fn))
@@ -368,8 +372,11 @@ def rocs_from_cv_dir(cv_dir, basename="combined_roc"):
     return roc_list
 
 
-def prcs_from_cv_dir(cv_dir):
-    prc_files = glob.glob(os.path.join(cv_dir, "*/combined_prc.*"))
+def prcs_from_cv_dir(cv_dir, fold=None, basename="combined_prc"):
+    if fold is None or not isinstance(fold, int):
+        fold = "*"
+    prc_files = glob.glob(
+        os.path.join(cv_dir, "{}/{}.*".format(fold, basename)))
     prc_list = []
     for fn in prc_files:
         logging.debug("Opening {}...".format(fn))
