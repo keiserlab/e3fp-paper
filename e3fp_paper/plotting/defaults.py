@@ -12,6 +12,8 @@ rcParams['text.latex.preamble'] = [r'\usepackage{siunitx}',
                                    r'\usepackage{helvet}',
                                    r'\usepackage{sansmath}',
                                    r'\sansmath']
+rcParams['path.simplify'] = True
+rcParams['path.simplify_threshold'] = 1.
 rc('text', usetex=False)
 rc('font', **{'family': 'sans-serif', 'sans-serif': ['Helvetica']})
 rc('mathtext', default='regular')
