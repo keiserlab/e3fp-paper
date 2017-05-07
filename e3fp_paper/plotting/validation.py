@@ -68,7 +68,10 @@ def plot_roc_curves(roc_lists, ax, y_min=0., names=None, colors=None,
         roc_list = [[x] for x in roc_lists]
 
     if show_inset:
-        ax_inset = inset_axes(ax, .85, .85, loc=4, borderpad=.7)
+        if show_legend:
+            ax_inset = inset_axes(ax, "25%", "25%", loc=4, borderpad=.7)
+        else:
+            ax_inset = inset_axes(ax, "33%", "33%", loc=4, borderpad=.7)
 
     for i, roc_list in enumerate(roc_lists):
         color = get_from_list(colors, i)
@@ -266,7 +269,7 @@ def plot_auc_stats(repeat_aucs_list, ax, names=None, colors=None,
         mean_auc, std_auc = np.mean(aucs), np.std(aucs)
         _, caps, _ = ax.errorbar(ticks[i], mean_auc, yerr=std_auc,
                                  zorder=i + 2, color=color, fmt='o',
-                                 capsize=2, ms=7, linewidth=1)
+                                 capsize=2, ms=6, linewidth=1)
         legend_names.append(name)
         legend_lines.append(caps)
 
@@ -275,12 +278,12 @@ def plot_auc_stats(repeat_aucs_list, ax, names=None, colors=None,
 
         if show_inset:
             _, caps, _ = ax_inset.errorbar(ticks[i], mean_auc, yerr=std_auc,
-                                           ms=5, zorder=i + 2, color=color,
+                                           ms=4, zorder=i + 2, color=color,
                                            fmt='o', capsize=1.5, linewidth=1)
             for cap in caps:
                 cap.set_markeredgewidth(1)
 
-    ax.set_xlim(0., 1.)
+    ax.set_xlim(-.05, 1.25)
     ax.set_xlabel(xlabel)
     if names is not None:
         ax.set_xticks(ticks)

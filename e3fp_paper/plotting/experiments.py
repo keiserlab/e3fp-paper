@@ -223,7 +223,7 @@ def plot_agonist_logEC50(fit_df, ax, num_fit_points=1000):
     fitEC50s = logEC50 + antagonist_shift(10**fit_logBs, pA2,
                                           schild_slope=schild_slope)
     fitEC50s = logEC50 / fitEC50s
-    ax.plot(fit_logBs, fitEC50s, color="k", linewidth=2)
+    ax.plot(fit_logBs, fitEC50s, color="k", linewidth=1)
     ax.set_ylabel(r"Agonist $\log{{EC_{{50}}}}$ (M)",
                   fontsize=fonts.ax_label_fontsize)
     ax.set_xlabel(r"$\log{{\left[Antagonist\right]}}$ (M)",
@@ -330,7 +330,7 @@ def plot_experiments(data_df, ax, fit_df=None, colors_dict={},
             max_plot_vals.append(fit.max())
             min_plot_vals.append(fit.min())
 
-            ax.plot(fit_logds, fit, color=color, linewidth=1.5,
+            ax.plot(fit_logds, fit, color=color, linewidth=1,
                     zorder=2 * i + 1)
 
         if col_df.ndim < 2:
@@ -371,10 +371,10 @@ def plot_experiments(data_df, ax, fit_df=None, colors_dict={},
     max_plot_val = max(max_plot_vals + [100])
     min_plot_val = min(min_plot_vals + [0])
     legend_loc = 'upper left'
-    ax.set_ylim(min_plot_val - 5, max_plot_val + 5)
+    ax.set_ylim(min_plot_val - 3, max_plot_val + 23)
 
     ax.legend(dots, labels, loc=legend_loc,
-              fontsize=fonts.legend_fontsize - 1, borderaxespad=-1,
+              fontsize=fonts.legend_fontsize, borderaxespad=-1,
               handletextpad=-.5)
     ax.set_xlim(logd_min - .5, logd_max + .5)
     ax.set_xlabel(r"$\log{{\left[Drug\right]}}$ (M)",
