@@ -15,8 +15,12 @@ rcParams['text.latex.preamble'] = [r'\usepackage{siunitx}',
 rcParams['path.simplify'] = True
 rcParams['path.simplify_threshold'] = 1.
 rc('text', usetex=False)
-rc('font', **{'family': 'sans-serif', 'sans-serif': ['Helvetica']})
+rc('font', family='sans-serif', size=8)
 rc('mathtext', default='regular')
+rc('xtick', labelsize=7)
+rc('ytick', labelsize=7)
+rc('legend', fontsize=7, labelspacing=.25)
+rc('axes', labelsize=8, titlesize=8)
 
 
 class DefaultColors(object):
@@ -40,8 +44,8 @@ class DefaultFonts(object):
     """Default fonts/sizes for plotting."""
 
     def __init__(self):
-        self.panel_label_fontsize = 16
-        self.title_fontsize = 14
-        self.ax_label_fontsize = 12
-        self.ax_ticks_fontsize = 10
-        self.legend_fontsize = 8
+        self.panel_label_fontsize = 12
+        self.title_fontsize = 8
+        self.ax_label_fontsize = 8
+        self.ax_ticks_fontsize = 7
+        self.legend_fontsize = 7
