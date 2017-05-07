@@ -316,10 +316,15 @@ def plot_experiments(data_df, ax, fit_df=None, colors_dict={},
                 fit = agonist_curve(fit_logds, top, bottom, logEC50,
                                     hill_slope=col_fit_df.loc["HillSlope"])
                 if label != 0:
-                    label = r"${:.0E}}}$".format(label).replace(
-                        r"E-", r"x10^{-")
+                    try:
+                        label = r"${:.0E}}}$".format(label).replace(
+                            r"E-", r"x10^{-")
+                    except ValueError:
+                        label = str(label)
                 else:
                     label = r"$0$"
+
+            label = label.replace("#", "")
 
             if normalize:
                 fit = get_normalized(fit, min_val, max_val)
