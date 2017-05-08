@@ -8,11 +8,11 @@ have [PyGraphviz](https://pygraphviz.github.io/),
 
 The SDF files for the three molecules whose graphs appear in
 Figure 1 of the paper may be found in `$E3FP_PROJECT/data`:
-    - `CHEMBL2110918.sdf.bz2`: cypenamine (Figure 1a)
-    - `CHEMBL270807.sdf.bz2`: (R)-2-(2-(2-methylpyrrolidin-1-yl)ethyl)pyridine (Figure 1b)
-    - `CHEMBL210990.sdf.bz2`: 2-[2-[methyl-[3-[[7-propyl-3-(trifluoromethyl)-1,2-benzoxazol-6-yl]oxy]propyl]amino]pyrimidin-5-yl]acetic acid (Figure 1c)
+- `CHEMBL2110918.sdf.bz2`: cypenamine (Figure 1a)
+- `CHEMBL270807.sdf.bz2`: (R)-2-(2-(2-methylpyrrolidin-1-yl)ethyl)pyridine (Figure 1b)
+- `CHEMBL210990.sdf.bz2`: 2-[2-[methyl-[3-[[7-propyl-3-(trifluoromethyl)-1,2-benzoxazol-6-yl]oxy]propyl]amino]pyrimidin-5-yl]acetic acid (Figure 1c)
 
-To generate the graph for cypenamine, for example, run
+To generate the graph for cypenamine, for example, run:
 
 ```bash
 pymol -r make_shell_figures.py -- $E3FP_PROJECT/data/CHEMBL2110918.sdf.bz2
