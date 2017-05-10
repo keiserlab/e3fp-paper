@@ -38,7 +38,7 @@ def data_df_from_file(fn, name_map={}):
     Pandas DataFrame
         Dataframe of data
     """
-    df = pd.DataFrame.from_csv(fn, sep="\t")
+    df = pd.read_csv(fn, sep="\t", index_col=0)
     df.replace(to_replace=r"\d+\*", value=pd.np.nan, regex=True, inplace=True)
     df.dropna(axis=1, how='all', inplace=True)
     df.columns = [str(x).split(".")[0] for x in df.columns]
@@ -213,7 +213,7 @@ def get_normalized(val, min_val, max_val, mult=100.):
     return mult * (val - min_val) / (max_val - min_val)
 
 
-def plot_agonist_logEC50(fit_df, ax, num_fit_points=1000):
+def plot_schild(fit_df, ax, num_fit_points=1000, color="k"):
     Bs = fit_df.loc["B"]
     fit_logBs = np.linspace(np.log10(Bs[1]) - 1, np.log10(Bs.max()),
                             num_fit_points)
@@ -222,9 +222,9 @@ def plot_agonist_logEC50(fit_df, ax, num_fit_points=1000):
     schild_slope = fit_df.loc["SchildSlope"][0]
     fitEC50s = logEC50 + antagonist_shift(10**fit_logBs, pA2,
                                           schild_slope=schild_slope)
-    fitEC50s = logEC50 / fitEC50s
-    ax.plot(fit_logBs, fitEC50s, color="k", linewidth=1)
-    ax.set_ylabel(r"Agonist $\log{{EC_{{50}}}}$ (M)",
+    EC50_ratio = 10**(fitEC50s - logEC50)
+    ax.plot(fit_logBs, np.log10(EC50_ratio - 1), color=color, linewidth=1)
+    ax.set_ylabel(r"Agonist $\log{{\left[EC_{{50}}\ Ratio - 1\right]}}$ (M)",
                   fontsize=fonts.ax_label_fontsize)
     ax.set_xlabel(r"$\log{{\left[Antagonist\right]}}$ (M)",
                   fontsize=fonts.ax_label_fontsize)
