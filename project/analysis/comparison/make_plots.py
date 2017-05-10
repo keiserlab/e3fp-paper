@@ -47,7 +47,7 @@ ECFP_REPEAT_DIRS = [x for x in glob.glob(os.path.join(CV_BASEDIR, "ecfp4*"))
 TC_COUNTS_FILE = os.path.join(PROJECT_DIR, "fingerprint_comparison",
                               "ecfp_e3fp_tcs_counts.csv.bz2")
 EXAMPLES_FILE = os.path.join(PROJECT_DIR, "data", "examples.txt")
-OUT_IMAGE_BASENAME = "fig_1"
+OUT_IMAGE_BASENAME = "fig_2"
 ROC_YMIN = .969
 FRAC_POS = .0051
 ECFP_TC_THRESH = .3
