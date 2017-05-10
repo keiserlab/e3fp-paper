@@ -34,8 +34,8 @@ ECFP_CHIRAL_REPEAT_DIRS = glob.glob(os.path.join(CV_BASEDIR, "ecfp4-chiral*"))
 ECFP_REPEAT_DIRS = [x for x in glob.glob(os.path.join(CV_BASEDIR, "ecfp4*"))
                     if x not in ECFP_CHIRAL_REPEAT_DIRS]
 
-SEA_PRC_BASENAME = "fig_s5"
-SEA_ROC_BASENAME = "fig_s6"
+SEA_PRC_BASENAME = "fig_s7"
+SEA_ROC_BASENAME = "fig_s8"
 
 CV_BASEDIR = os.path.join(PROJECT_DIR, 'crossvalidation', 'classifiers')
 E3FP_NB_DIR = os.path.join(CV_BASEDIR, "e3fp_nbc")
@@ -57,8 +57,8 @@ E3FP_MEAN_NB_DIR = os.path.join(CV_MEAN_BASEDIR, "e3fp_nbc")
 E3FP_MEAN_RF_DIR = os.path.join(CV_MEAN_BASEDIR, "e3fp_rf")
 E3FP_MEAN_SVM_DIR = os.path.join(CV_MEAN_BASEDIR, "e3fp_linsvm")
 E3FP_MEAN_NN_DIR = os.path.join(CV_MEAN_BASEDIR, "e3fp_nn")
-SKLEARN_PRC_BASENAME = "fig_s7"
-SKLEARN_ROC_BASENAME = "fig_s8"
+SKLEARN_PRC_BASENAME = "fig_s5"
+SKLEARN_ROC_BASENAME = "fig_s6"
 
 SEA_ROC_YMIN = .969
 SKLEARN_ROC_YMIN = .874
