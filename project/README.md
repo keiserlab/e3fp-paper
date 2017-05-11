@@ -34,3 +34,7 @@ The sections are best understood when browsed in the following order:
 5. [Analysis and Figures](analysis): This section contains all scripts
    necessary to generate figures, tables, and statistics that appeared in the
    paper.
+
+The additional [`data`](data) and [`scripts`](scripts) directories contain all
+data files and general purpose scripts needed to perform the analyses in these
+sections.
