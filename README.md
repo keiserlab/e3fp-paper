@@ -1,6 +1,10 @@
 # Extended 3-Dimensional FingerPrint (E3FP) Paper Materials
 
-[E3FP](https://github.com/keiserlab/e3fp) is computational method for generating 3D molecular fingerprints. This repository serves as an application of E3FP and contains a Python 2.7.x-compatible library and all scripts necessary to reproduce the analyses and figures in the E3FP paper<sup>[1](#axen2017)</sup>.
+[E3FP](https://github.com/keiserlab/e3fp) is computational method for
+generating 3D molecular fingerprints. This repository serves as an application
+of E3FP and contains a Python 2.7.x-compatible library and all scripts
+necessary to reproduce the analyses and figures in the E3FP
+paper<sup>[1](#axen2017)</sup>.
 
 ## Table of Contents
 - [Overview](#overview)
@@ -18,8 +22,15 @@
 
 This repository is divided into two sections:
 
-- [`e3fp_paper`](e3fp_paper) is a Python library containing various classes and methods used in the paper analysis. Specifically, it contains code for interfacing with SeaWare, an implementation of the Similarity Ensemble Approach (SEA), loading and saving SEA-compatible filetypes, running *k*-fold cross-validation, and plotting the results.
-- [`project`](project) contains all scripts necessary to run the analyses in the paper. While instructions are provided, please see the E3FP paper<sup>[1](#axen2017)</sup> (preprint available) for detailed explanations.
+- [`e3fp_paper`](e3fp_paper) is a Python library containing various classes
+  and methods used in the paper analysis. Specifically, it contains code for
+  interfacing with SeaWare, an implementation of the Similarity Ensemble
+  Approach (SEA), loading and saving SEA-compatible filetypes, running
+  *k*-fold cross-validation, and plotting the results.
+- [`project`](project) contains all scripts necessary to run the analyses in
+  the paper. While instructions are provided, please see the E3FP
+  paper<sup>[1](#axen2017)</sup> (preprint available) for detailed
+  explanations.
 
 <a name="dependencies"></a>
 ## Dependencies
@@ -49,7 +60,8 @@ The following packages and their dependencies must be installed:
 <a name="requiredproj"></a>
 #### Required for Project
 
-In addition to the above packages, these must be installed to run the project scripts.
+In addition to the above packages, these must be installed to run the project
+scripts.
 
 - [Spearmint](https://github.com/JasperSnoek/spearmint)
 - [Seaborn](https://seaborn.pydata.org)
@@ -61,7 +73,8 @@ In addition to the above packages, these must be installed to run the project sc
 ### Optional
 
 Some computationally expensive analyses have built-in acceleration with
-[python_utilities](https://github.com/sdaxen/python_utilities) that activates when one of the following packages is installed:
+[python_utilities](https://github.com/sdaxen/python_utilities) that activates
+when one of the following packages is installed:
 
 - [mpi4py](http://mpi4py.scipy.org)
 - [futures](https://pypi.python.org/pypi/futures)
@@ -69,13 +82,19 @@ Some computationally expensive analyses have built-in acceleration with
 <a name="setup"></a>
 ## Setup and Installation
 
-Before installing, you must manually install [RDKit](http://www.rdkit.org), SeaWare, [Spearmint](https://github.com/JasperSnoek/spearmint), and [PyMOL](https://www.pymol.org). If you do not have `pip` or `setuptools`, you must also install the remaining required dependencies.
+Before installing, you must manually install [RDKit](http://www.rdkit.org),
+SeaWare, [Spearmint](https://github.com/JasperSnoek/spearmint), and
+[PyMOL](https://www.pymol.org). If you do not have `pip` or `setuptools`, you
+must also install the remaining required dependencies.
 
 ### Clone the Repository
 0. Install any of the optional dependencies above.
 1. Download this repository to your machine.
-    - Clone this repository to your machine with `git clone https://github.com/keiserlab/e3fp-paper.git`.
-    - OR download an archive by navigating to [https://github.com/keiserlab/e3fp-paper](https://github.com/keiserlab/e3fp-paper) and clicking "Download ZIP". Extract the archive.
+    - Clone this repository to your machine with
+      `git clone https://github.com/keiserlab/e3fp-paper.git`.
+    - OR download an archive by navigating to
+      [https://github.com/keiserlab/e3fp-paper](https://github.com/keiserlab/e3fp-paper)
+      and clicking "Download ZIP". Extract the archive.
 2. Install with
     ```bash
     cd e3fp-paper
@@ -102,9 +121,12 @@ To use the Python library in a python script, enter:
 ```python
 import e3fp_paper
 ```
-See [`pipeline.py`](e3fp_paper/pipeline.py) for methods for interfacing E3FP's [pipeline](https://github.com/keiserlab/e3fp/blob/master/e3fp/pipeline.py) with the specific filetypes used in the paper library.
+See [`pipeline.py`](e3fp_paper/pipeline.py) for methods for interfacing E3FP's
+[pipeline](https://github.com/keiserlab/e3fp/blob/master/e3fp/pipeline.py)
+with the specific filetypes used in the paper library.
 
-See the provided [scripts](project/scripts) for applications of E3FP and of the `e3fp_paper` library.
+See the provided [scripts](project/scripts) for applications of E3FP and of
+the `e3fp_paper` library.
 
 <a name="references"></a>
 ## References
