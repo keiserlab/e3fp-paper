@@ -84,8 +84,8 @@ when one of the following packages is installed:
 
 Before installing, you must manually install [RDKit](http://www.rdkit.org),
 SeaWare, [Spearmint](https://github.com/JasperSnoek/spearmint), and
-[PyMOL](https://www.pymol.org). If you do not have `pip` or `setuptools`, you
-must also install the remaining required dependencies.
+[PyMOL](https://www.pymol.org). Additionally you will need `pip` and
+`setuptools`.
 
 ### Clone the Repository
 0. Install any of the optional dependencies above.
@@ -96,11 +96,6 @@ must also install the remaining required dependencies.
       [https://github.com/keiserlab/e3fp-paper](https://github.com/keiserlab/e3fp-paper)
       and clicking "Download ZIP". Extract the archive.
 2. Install with
-    ```bash
-    cd e3fp-paper
-    python setup.py install
-    ```
-    OR
     ```bash
     cd e3fp-paper
     pip install .
