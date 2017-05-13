@@ -1,0 +1,2 @@
+include LICENSE.txt
+recursive-include e3fp_paper *cfg *fit
