@@ -10,7 +10,7 @@ from python_utilities.scripting import setup_logging
 from python_utilities.io_tools import smart_open
 
 ECFP_MIN_PVALUE = .1
-E3FP_MAX_PVALUE = 1e-20
+E3FP_MAX_PVALUE = 1e-25
 E3FP_MIN_AFFINITY = 10
 ECFP_TC_CUTOFF = 0.3
 OUTFILE = "unique_hits_aff{:d}_3dpval{:.4g}_2dpval{:.4g}.txt".format(
