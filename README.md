@@ -106,14 +106,6 @@ must also install the remaining required dependencies.
     pip install .
     ```
 
-### Testing
-After installation, it is recommended to run all tests with `nose`,
-
-```bash
-pip install nose
-nosetests e3fp_paper
-```
-
 <a name="usage"></a>
 ## Usage and Overview
 
