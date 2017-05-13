@@ -1,6 +1,6 @@
 # Extended 3-Dimensional FingerPrint (E3FP) Paper Materials
 
-[E3FP](https://github.com/keiserlab/e3fp) is computational method for
+[E3FP](https://github.com/keiserlab/e3fp) is a computational method for
 generating 3D molecular fingerprints. This repository serves as an application
 of E3FP and contains a Python 2.7.x-compatible library and all scripts
 necessary to reproduce the analyses and figures in the E3FP
