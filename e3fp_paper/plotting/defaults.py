@@ -4,9 +4,12 @@ Author: Seth Axen
 E-mail: seth.axen@gmail.com
 """
 from matplotlib import rc, rcParams
-import seaborn as sns
+try:
+    import seaborn as sns
+    sns.set_style("white")
+except ImportError:
+     pass
 
-sns.set_style("white")
 rcParams['text.latex.preamble'] = [r'\usepackage{siunitx}',
                                    r'\sisetup{detect-all}',
                                    r'\usepackage{helvet}',
