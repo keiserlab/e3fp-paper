@@ -9,12 +9,12 @@ import logging
 from python_utilities.scripting import setup_logging
 from python_utilities.io_tools import smart_open
 
-ECFP_MAX_PVALUE = .1
-E3FP_MIN_PVALUE = 1e-20
+ECFP_MIN_PVALUE = .1
+E3FP_MAX_PVALUE = 1e-20
 E3FP_MIN_AFFINITY = 10
 ECFP_TC_CUTOFF = 0.3
 OUTFILE = "unique_hits_aff{:d}_3dpval{:.4g}_2dpval{:.4g}.txt".format(
-    E3FP_MIN_AFFINITY, E3FP_MIN_PVALUE, ECFP_MAX_PVALUE)
+    E3FP_MIN_AFFINITY, E3FP_MAX_PVALUE, ECFP_MIN_PVALUE)
 
 
 def reformat_mol_results(mol_results_dict):
@@ -44,7 +44,7 @@ if __name__ == "__main__":
             if (mol_name not in ecfp4_mol_results or
                     tid not in ecfp4_mol_results[mol_name] or
                     ecfp4_mol_results[mol_name][tid][max(
-                        ecfp4_mol_results[mol_name][tid].keys())][0] > ECFP_MAX_PVALUE):
+                        ecfp4_mol_results[mol_name][tid].keys())][0] > ECFP_MIN_PVALUE):
                 for affinity, results_tuple in sorted(
                         affinity_results.items()):
                     if affinity > E3FP_MIN_AFFINITY:
@@ -53,7 +53,7 @@ if __name__ == "__main__":
                         ecfp_results = ecfp4_mol_results[mol_name][tid][affinity]
                     except KeyError:
                         ecfp_results = (1.0, ECFP_TC_CUTOFF)
-                    if results_tuple[0] <= E3FP_MIN_PVALUE:
+                    if results_tuple[0] <= E3FP_MAX_PVALUE:
                         e3fp_unique_mol_results[(
                             mol_name, tid,
                             affinity)] = results_tuple + ecfp_results
