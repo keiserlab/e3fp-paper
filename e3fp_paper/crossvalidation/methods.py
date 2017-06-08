@@ -274,23 +274,23 @@ class ClassifierCVMethodBase(CVMethod):
         self.fit_dir = os.path.join(self.out_dir, "target_fits")
         touch_dir(self.fit_dir)
 
-    @staticmethod
-    def create_clf(data=None):
+    @classmethod
+    def create_clf(cls, data=None):
         """Initialize new classifier."""
         raise NotImplementedError
 
-    @staticmethod
-    def train_clf(self, data, result, batch_size=None):
+    @classmethod
+    def train_clf(cls, self, data, result, batch_size=None):
         """Train classifier with data and result, optionally in batches."""
         raise NotImplementedError
 
-    @staticmethod
-    def score_clf(clf, data, result):
+    @classmethod
+    def score_clf(cls, clf, data, result):
         """Score trained classifier."""
         raise NotImplementedError
 
-    @staticmethod
-    def calculate_pred(clf, data):
+    @classmethod
+    def calculate_pred(cls, clf, data):
         """Compute probabilities of positive for dataset."""
         raise NotImplementedError
 
@@ -497,18 +497,18 @@ class SKLearnCVMethodBase(ClassifierCVMethodBase):
 
     """Base class for using scikit-learn based classifiers."""
 
-    @staticmethod
-    def train_clf(clf, data, result, batch_size=None):
+    @classmethod
+    def train_clf(cls, clf, data, result, batch_size=None):
         """Train classifier with data and result."""
         clf.fit(data, result)
 
-    @staticmethod
-    def score_clf(clf, data, result):
+    @classmethod
+    def score_clf(cls, clf, data, result):
         """Score trained classifier."""
         return clf.score(data, result)
 
-    @staticmethod
-    def calculate_pred(clf, data):
+    @classmethod
+    def calculate_pred(cls, clf, data):
         """Compute probabilities of positive for dataset.
 
         Parameters
@@ -521,6 +521,39 @@ class SKLearnCVMethodBase(ClassifierCVMethodBase):
         return clf.predict_proba(data)[:, 1]
 
 
+def tanimoto_kernel(X, Y=None):
+    """Compute the Tanimoto kernel between X and Y.
+
+    Data must be binary. This is not checked.
+
+    Parameters
+    ----------
+    X : array_like, sparse matrix
+        with shape (n_samples_X, n_features).
+    Y : array_like, sparse matrix (optional)
+        with shape (n_samples_Y, n_features).
+
+    Returns
+    -------
+    similarity_matrix : array of shape (n_samples_X, n_samples_Y)
+
+    References
+    ----------
+    ..[1] L. Ralaivola, S.J. Swamidass, H. Saigo, P. Baldi."Graph kernels for
+          chemical informatics." Neural Networks. 2005. 18(8): 1093-1110.
+          doi: 10.1.1.92.483
+    """
+    X, Y = check_pairwise_arrays(X, Y)
+    if issparse(X) or issparse(Y):  # ensure if one is sparse, all are sparse.
+        X = csr_matrix(X, copy=False)
+        Y = csr_matrix(Y, copy=False)
+    Xbits = np.sum(X, axis=1, keepdims=True)
+    Ybits = np.sum(Y, axis=1, keepdims=True)
+    XYbits = safe_sparse_dot(X, Y.T, dense_output=True)
+    with np.errstate(divide='ignore'):  # handle 0 in denominator
+        return np.asarray(np.nan_to_num(XYbits / (Xbits + Ybits.T - XYbits)))
+
+
 class SVMCVMethod(SKLearnCVMethodBase):
 
     """Cross-validation method using a Tanimoto Support Vector Machine classifier.
@@ -530,14 +563,16 @@ class SVMCVMethod(SKLearnCVMethodBase):
 
     default_pred = -np.inf  # max_dist_from_hyperplane_neg
     dense_data = True
+    kernel = staticmethod(tanimoto_kernel)
+    random_state = RANDOM_STATE
 
-    @staticmethod
-    def create_clf(data=None):
+    @classmethod
+    def create_clf(cls, data=None):
         """Create SVM classifier with tanimoto kernel."""
-        return svm.SVC(kernel=tanimoto_kernel, random_state=RANDOM_STATE)
+        return svm.SVC(kernel=cls.kernel, random_state=cls.random_state)
 
-    @staticmethod
-    def calculate_pred(clf, data):
+    @classmethod
+    def calculate_pred(cls, clf, data):
         """Compute distances between data points and hyperplane.
 
         Negative distances are on the "negative" side of the plane, and
@@ -561,13 +596,17 @@ class LinearSVMCVMethod(SVMCVMethod):
     """
 
     dense_data = False
+    penalty = "l1"
+    loss = "squared_hinge"
+    tol = 1e-4
+    random_state = RANDOM_STATE
 
-    @staticmethod
-    def create_clf(data=None):
+    @classmethod
+    def create_clf(cls, data=None):
         """Create SVM classifier with linear kernel."""
-        return svm.LinearSVC(penalty="l1", dual=False,
-                             class_weight="balanced", loss="squared_hinge",
-                             tol=1e-4, random_state=RANDOM_STATE)
+        return svm.LinearSVC(penalty=cls.penalty, dual=False,
+                             class_weight="balanced", loss=cls.loss,
+                             tol=cls.tol, random_state=cls.random_state)
 
     def save_fit_file(self, target_key, clf):
         """Save target fit to file."""
@@ -579,12 +618,17 @@ class RandomForestCVMethod(SKLearnCVMethodBase):
 
     """Cross-validation method using a Random Forest."""
 
-    @staticmethod
-    def create_clf(data=None):
+    n_estimators = 100
+    max_depth = 2
+    random_state = RANDOM_STATE
+
+    @classmethod
+    def create_clf(cls, data=None):
         """Create Random Forest classifier."""
-        return RandomForestClassifier(n_estimators=100, max_depth=2,
+        return RandomForestClassifier(n_estimators=cls.n_estimators,
+                                      max_depth=cls.max_depth,
                                       min_samples_split=2, n_jobs=-1,
-                                      random_state=RANDOM_STATE,
+                                      random_state=cls.random_state,
                                       class_weight="balanced")
 
 
@@ -592,8 +636,8 @@ class NaiveBayesCVMethod(SKLearnCVMethodBase):
 
     """Cross-validation method using a Naive Bayesian Classifier."""
 
-    @staticmethod
-    def create_clf(data=None):
+    @classmethod
+    def create_clf(cls, data=None):
         if (data is None or (not np.issubdtype(data.dtype, np.floating) and
                              data.max() == 1)):
             return BernoulliNB(alpha=1.0, fit_prior=True)
@@ -675,32 +719,46 @@ class NeuralNetCVMethod(ClassifierCVMethodBase):
 
     dense_data = True
     fit_file_ext = ".pkl"
+    hidden_num_units = 512
+    input_dropout_rate = .1
+    hidden_dropout_rate = .25
+    leakiness = .01
+    hidden_nonlinearity = leaky_rectify
+    output_nonlinearity = softmax
+    max_epochs = 1000
+    patience = 75
+    default_bits = 1024
+    max_batch_size = 1000
+    min_percent_data_in_batch = .2
 
-    @staticmethod
-    def create_clf(data=None):
+    @classmethod
+    def create_clf(cls, data=None):
         """Create neural network."""
         try:
             bits = data.shape[1]
         except AttributeError:
-            bits = 1024
+            bits = cls.default_bits
         net_params = {"layers": [("input", InputLayer),
                                  ("inputdrop", DropoutLayer),
                                  ("hidden", DenseLayer),
                                  ("hiddendrop", DropoutLayer),
                                  ("output", DenseLayer)],
                       "input_shape": (None, bits),
-                      "inputdrop_p": .1,
-                      "hidden_num_units": 512,
-                      "hidden_nonlinearity": leaky_rectify,
-                      "hiddendrop_p": .25,
+                      "inputdrop_p": cls.input_dropout_rate,
+                      "hidden_num_units": cls.hidden_num_units,
+                      "hidden_nonlinearity": cls.hidden_nonlinearity,
+                      "hiddendrop_p": cls.hidden_dropout_rate,
                       "output_num_units": 2,
-                      "output_nonlinearity": softmax,
-                      "update_learning_rate": 0.01,
-                      "max_epochs": 1000,
-                      "on_epoch_finished": EarlyStopping(patience=75)}
+                      "output_nonlinearity": cls.output_nonlinearity,
+                      "update_learning_rate": cls.leakiness,
+                      "max_epochs": cls.max_epochs,
+                      "on_epoch_finished": EarlyStopping(
+                          patience=cls.patience)}
         clf = NeuralNet(**net_params)
         if data is not None:
-            batch_size = min(1000, int(.2 * data.shape[0]))
+            batch_size = min(cls.max_batch_size,
+                             int(cls.min_percent_data_in_batch *
+                                 data.shape[0]))
             clf.batch_iterator_train = BalancedClassIterator(
                 batch_size=batch_size)
             clf.batch_iterator_test = BalancedClassIterator(
@@ -708,18 +766,18 @@ class NeuralNetCVMethod(ClassifierCVMethodBase):
 
         return clf
 
-    @staticmethod
-    def train_clf(clf, data, result, batch_size=None):
+    @classmethod
+    def train_clf(cls, clf, data, result, batch_size=None):
         """Train neural network with data and result."""
         return clf.fit(data, result.astype(np.int32))
 
-    @staticmethod
-    def score_clf(clf, data, result):
+    @classmethod
+    def score_clf(cls, clf, data, result):
         """Score trained neural network."""
         return clf.score(data, result)
 
-    @staticmethod
-    def calculate_pred(clf, data):
+    @classmethod
+    def calculate_pred(cls, clf, data):
         """Compute probabilities of positive for dataset."""
         return clf.predict_proba(data)[:, 1]
 
@@ -740,36 +798,3 @@ class NeuralNetCVMethod(ClassifierCVMethodBase):
     def __del__(self):
         self.target_fits.close()
         del self.target_fits
-
-
-def tanimoto_kernel(X, Y=None):
-    """Compute the Tanimoto kernel between X and Y.
-
-    Data must be binary. This is not checked.
-
-    Parameters
-    ----------
-    X : array_like, sparse matrix
-        with shape (n_samples_X, n_features).
-    Y : array_like, sparse matrix (optional)
-        with shape (n_samples_Y, n_features).
-
-    Returns
-    -------
-    similarity_matrix : array of shape (n_samples_X, n_samples_Y)
-
-    References
-    ----------
-    ..[1] L. Ralaivola, S.J. Swamidass, H. Saigo, P. Baldi."Graph kernels for
-          chemical informatics." Neural Networks. 2005. 18(8): 1093-1110.
-          doi: 10.1.1.92.483
-    """
-    X, Y = check_pairwise_arrays(X, Y)
-    if issparse(X) or issparse(Y):  # ensure if one is sparse, all are sparse.
-        X = csr_matrix(X, copy=False)
-        Y = csr_matrix(Y, copy=False)
-    Xbits = np.sum(X, axis=1, keepdims=True)
-    Ybits = np.sum(Y, axis=1, keepdims=True)
-    XYbits = safe_sparse_dot(X, Y.T, dense_output=True)
-    with np.errstate(divide='ignore'):  # handle 0 in denominator
-        return np.asarray(np.nan_to_num(XYbits / (Xbits + Ybits.T - XYbits)))
