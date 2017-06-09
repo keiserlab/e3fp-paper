@@ -1,3 +1,8 @@
+"""Run cross-validation.
+
+Author: Seth Axen
+E-mail: seth.axen@gmail.com
+"""
 import os
 import logging
 import cPickle as pkl
