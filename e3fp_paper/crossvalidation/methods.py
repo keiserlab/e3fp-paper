@@ -547,8 +547,11 @@ def tanimoto_kernel(X, Y=None):
     if issparse(X) or issparse(Y):  # ensure if one is sparse, all are sparse.
         X = csr_matrix(X, copy=False)
         Y = csr_matrix(Y, copy=False)
-    Xbits = np.sum(X, axis=1, keepdims=True)
-    Ybits = np.sum(Y, axis=1, keepdims=True)
+        Xbits = np.sum(X, axis=1)
+        Ybits = np.sum(Y, axis=1)
+    else:
+        Xbits = np.sum(X, axis=1, keepdims=True)
+        Ybits = np.sum(Y, axis=1, keepdims=True)
     XYbits = safe_sparse_dot(X, Y.T, dense_output=True)
     with np.errstate(divide='ignore'):  # handle 0 in denominator
         return np.asarray(np.nan_to_num(XYbits / (Xbits + Ybits.T - XYbits)))
