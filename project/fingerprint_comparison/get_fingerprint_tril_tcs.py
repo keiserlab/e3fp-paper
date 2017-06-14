@@ -30,6 +30,7 @@ def cache_tcs_to_binary(fn, tcs_tril):
     with smart_open(fn, 'ab') as f:
         tcs_list = list(itertools.chain(*tcs_tril))
         f.write(struct.pack('d' * len(tcs_list), *tcs_list))
+    tcs_tril[:] = [[]]
 
 
 def cache_mol_names(fn, mol_names):
@@ -110,7 +111,6 @@ def run_batch(start_index, end_index, fp_array=None, mol_names=[],
             cache_tcs_to_binary(max_tcs_file, max_tcs_tril)
             cache_mol_names(mol_names_file,
                             search_mol_names[last_save_ind + 1:])
-            max_tcs_tril = [[]]
             pairs_since_last_save = 0
             last_save_ind = index
 
