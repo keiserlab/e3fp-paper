@@ -76,7 +76,7 @@ def run_batch(start_index, end_index, fp_array=None, mol_names=[],
         search_array = None
     total_pairs_searched = 0
     pairs_since_last_save = 0
-    last_save_ind = 0
+    last_save_ind = -1
     for index, mol_name in enumerate(mol_names):
         if index < start_index:
             continue
