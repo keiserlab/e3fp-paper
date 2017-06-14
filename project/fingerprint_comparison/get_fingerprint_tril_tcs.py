@@ -49,6 +49,7 @@ def safe_unlink(fn):
 
 def run_batch(start_index, end_index, fp_array=None, mol_names=[],
               mol_indices_dict={}, overwrite=True):
+    """Save pairwise TCs for specified region of lower triangle matrix."""
     base_output_name_strings = ['start-{0}'.format(start_index),
                                 'end-{0}'.format(end_index)]
     max_tcs_file = '_'.join(['max_tcs'] + base_output_name_strings) + '.bin.gz'
@@ -134,5 +135,9 @@ def main(molecules_file):
 
 
 if __name__ == '__main__':
-    molecules_file = sys.argv[1]
+    usage = "python get_fingerprint_tril_tcs.py <molecules_file>"
+    try:
+        molecules_file = sys.argv[1]
+    except:
+        sys.exit(usage)
     main(molecules_file)
