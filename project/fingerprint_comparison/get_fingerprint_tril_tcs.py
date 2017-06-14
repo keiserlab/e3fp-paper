@@ -18,7 +18,7 @@ from python_utilities.parallel import Parallelizer
 from e3fp_paper.sea_utils.util import molecules_to_lists_dicts
 from e3fp_paper.crossvalidation.util import molecules_to_array
 from e3fp_paper.crossvalidation.methods import tanimoto_kernel
-from get_triangle_indices import get_triangle_indices
+from get_triangle_indices import get_triangle_indices, get_batch_size
 
 SAVE_FREQ = 1000000  # min number of mol pairs between saves
 
@@ -42,8 +42,7 @@ def run_batch(start_index, end_index, fp_array=None, mol_names=[],
     mol_names_file = ('_'.join(['mol_names'] + base_output_name_strings) +
                       '.csv')
 
-    batch_size = (.5 * end_index * (end_index - 1) -
-                  .5 * start_index * (start_index - 1))
+    batch_size = get_batch_size(start_index, end_index)
     logging.info("Will save max tcs to {} and mol names to {}".format(
         max_tcs_file, mol_names_file))
 
@@ -84,7 +83,7 @@ def run_batch(start_index, end_index, fp_array=None, mol_names=[],
         # Cache results to file
         if (search_mol_names and index >= start_index and
                 (pairs_since_last_save >= SAVE_FREQ or
-                 (end_index and index >= end_index - 1))):
+                 (end_index and index >= end_index))):
             total_pairs_searched += pairs_since_last_save
             perc_complete = total_pairs_searched / batch_size
             logging.info(("{} molecules recorded. Appending tcs to {} and "
