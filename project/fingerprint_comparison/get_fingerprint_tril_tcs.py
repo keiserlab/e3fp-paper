@@ -8,12 +8,14 @@ Authors: Seth Axen, Nick Mew
 E-mail: seth.axen@gmail.com
 """
 from __future__ import division
+import os
 import sys
 import struct
 import itertools
 import logging
 
 import numpy as np
+from python_utilities.io_tools import smart_open
 from python_utilities.parallel import Parallelizer
 from e3fp_paper.sea_utils.util import molecules_to_lists_dicts
 from e3fp_paper.crossvalidation.util import molecules_to_array
@@ -24,27 +26,42 @@ SAVE_FREQ = 1000000  # min number of mol pairs between saves
 
 
 def cache_tcs_to_binary(fn, tcs_tril):
-    with open(fn, 'ab') as f:
+    """Append new tcs to binary file and clear lower triangle."""
+    with smart_open(fn, 'ab') as f:
         tcs_list = list(itertools.chain(*tcs_tril))
         f.write(struct.pack('d' * len(tcs_list), *tcs_list))
 
 
 def cache_mol_names(fn, mol_names):
-    with open(fn, 'ab') as f:
+    """Append mol names to file."""
+    with smart_open(fn, 'ab') as f:
         f.write('\n'.join(mol_names) + '\n')
 
 
+def safe_unlink(fn):
+    """Unlink file if exists."""
+    try:
+        os.remove(fn)
+    except OSError:
+        pass
+
+
 def run_batch(start_index, end_index, fp_array=None, mol_names=[],
-              mol_indices_dict={}):
+              mol_indices_dict={}, overwrite=True):
     base_output_name_strings = ['start-{0}'.format(start_index),
                                 'end-{0}'.format(end_index)]
-    max_tcs_file = '_'.join(['max_tcs'] + base_output_name_strings) + '.bin'
+    max_tcs_file = '_'.join(['max_tcs'] + base_output_name_strings) + '.bin.gz'
     mol_names_file = ('_'.join(['mol_names'] + base_output_name_strings) +
-                      '.csv')
+                      '.csv.gz')
 
     batch_size = get_batch_size(start_index, end_index)
     logging.info("Will save max tcs to {} and mol names to {}".format(
         max_tcs_file, mol_names_file))
+
+    # Remove files
+    if overwrite:
+        safe_unlink(max_tcs_file)
+        safe_unlink(mol_names_file)
 
     max_tcs_tril = [[]]
     search_mol_names = mol_names[:start_index]
