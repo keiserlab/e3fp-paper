@@ -48,7 +48,7 @@ def main(bin_files, mol_name_files, np_file, out_mol_names_file):
 
             print("Adding values to memmap.")
             memmap[data_count:data_count + len(data_list)] = data_list
-            memmap.fush()
+            memmap.flush()
             data_count += len(data_list)
     del memmap
 
