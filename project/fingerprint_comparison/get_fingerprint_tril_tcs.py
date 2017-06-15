@@ -48,6 +48,23 @@ def safe_unlink(fn):
         pass
 
 
+def all_exist(*fns):
+    return all([os.path.isfile(x) for x in fns])
+
+
+def any_exist(*fns):
+    return any([os.path.isfile(x) for x in fns])
+
+
+def get_num_mols(mol_names_file):
+    i = 0
+    with smart_open(mol_names_file, 'rb') as f:
+        for l in f:
+            if len(l.rstrip()) > 0:
+                i += 1
+    return i
+
+
 def run_batch(start_index, end_index, fp_array=None, mol_names=[],
               mol_indices_dict={}, overwrite=False):
     """Save pairwise TCs for specified region of lower triangle matrix."""
@@ -61,10 +78,25 @@ def run_batch(start_index, end_index, fp_array=None, mol_names=[],
     logging.info("Will save max tcs to {} and mol names to {}".format(
         max_tcs_file, mol_names_file))
 
-    # Remove files
+    total_pairs_searched = 0
+    last_save_ind = -1
+
+    # Remove files or resume
     if overwrite:
+        logging.info("Removing old files.")
         safe_unlink(max_tcs_file)
         safe_unlink(mol_names_file)
+    elif all_exist(max_tcs_file, mol_names_file):
+        logging.info("Resuming from existing files.")
+        existing_index = get_num_mols(mol_names_file)
+        last_save_ind = existing_index - 1
+        total_pairs_searched = get_batch_size(start_index, existing_index - 1)
+        start_index = existing_index
+        logging.info(
+            "Found {0} mol names. Resuming from index {0}.".format(
+                existing_index))
+    elif any_exist(max_tcs_file, mol_names_file):
+        sys.exit("Not all files exist, so cannot resume from old run.")
 
     max_tcs_tril = [[]]
     search_mol_names = mol_names[:start_index]
@@ -76,9 +108,7 @@ def run_batch(start_index, end_index, fp_array=None, mol_names=[],
         search_array = fp_array[search_fp_indices, :]
     else:
         search_array = None
-    total_pairs_searched = 0
     pairs_since_last_save = 0
-    last_save_ind = -1
     for index, mol_name in enumerate(mol_names):
         if index < start_index:
             continue
