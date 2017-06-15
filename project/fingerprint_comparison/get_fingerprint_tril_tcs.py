@@ -13,6 +13,7 @@ import sys
 import struct
 import itertools
 import logging
+import argparse
 
 import numpy as np
 from python_utilities.io_tools import smart_open
@@ -48,7 +49,7 @@ def safe_unlink(fn):
 
 
 def run_batch(start_index, end_index, fp_array=None, mol_names=[],
-              mol_indices_dict={}, overwrite=True):
+              mol_indices_dict={}, overwrite=False):
     """Save pairwise TCs for specified region of lower triangle matrix."""
     base_output_name_strings = ['start-{0}'.format(start_index),
                                 'end-{0}'.format(end_index)]
@@ -122,7 +123,7 @@ def run_batch(start_index, end_index, fp_array=None, mol_names=[],
     return 0
 
 
-def main(molecules_file):
+def main(molecules_file, overwrite=False):
     _, mol_list_dict, _ = molecules_to_lists_dicts(molecules_file)
     mol_names = sorted(mol_list_dict)
     fp_array, mol_indices_dict = molecules_to_array(mol_list_dict, mol_names)
@@ -130,14 +131,17 @@ def main(molecules_file):
     para = Parallelizer()
     start_end_indices = get_triangle_indices(len(mol_names), para.num_proc - 1)
     kwargs = {"fp_array": fp_array, "mol_names": mol_names,
-              "mol_indices_dict": mol_indices_dict}
+              "mol_indices_dict": mol_indices_dict, "overwrite": overwrite}
     para.run(run_batch, start_end_indices, kwargs=kwargs)
 
 
 if __name__ == '__main__':
-    usage = "python get_fingerprint_tril_tcs.py <molecules_file>"
-    try:
-        molecules_file = sys.argv[1]
-    except:
-        sys.exit(usage)
-    main(molecules_file)
+    parser = argparse.ArgumentParser(
+        """Compute pairwise max Tanimoto coefficients between molecules.""",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('molecules_file', type=str,
+                        help="""Path to SEA-format molecules file.""")
+    parser.add_argument('-o', '--overwrite', action="store_true",
+                        help="""Overwrite existing file(s).""")
+    params = parser.parse_args()
+    main(params.molecules_file, overwrite=params.overwrite)
