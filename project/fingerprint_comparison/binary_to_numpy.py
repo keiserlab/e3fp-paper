@@ -59,7 +59,7 @@ def main(bin_files, np_file, out_mol_names_file):
             data_size = data.shape[0]
             diff = data_size - expect_size
             if diff > 0:
-                if diff == end_ind:  # handle old +1 error
+                if diff == end_ind + 1:  # handle old +1 error
                     logging.info("Trimming redundant row from file.")
                     data = data[:-diff]
                     data_size = data.shape[0]
