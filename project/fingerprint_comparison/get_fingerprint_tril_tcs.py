@@ -17,7 +17,8 @@ import argparse
 
 import numpy as np
 from python_utilities.io_tools import smart_open
-from python_utilities.parallel import Parallelizer
+from python_utilities.scripting import setup_logging
+from python_utilities.parallel import Parallelizer, ALL_PARALLEL_MODES
 from e3fp_paper.sea_utils.util import molecules_to_lists_dicts
 from e3fp_paper.crossvalidation.util import molecules_to_array
 from e3fp_paper.crossvalidation.methods import tanimoto_kernel
@@ -153,12 +154,14 @@ def run_batch(start_index, end_index, fp_array=None, mol_names=[],
     return 0
 
 
-def main(molecules_file, overwrite=False):
+def main(molecules_file, log=None, overwrite=False, parallel_mode=None,
+         num_proc=None):
+    setup_logging(log)
     _, mol_list_dict, _ = molecules_to_lists_dicts(molecules_file)
     mol_names = sorted(mol_list_dict)
     fp_array, mol_indices_dict = molecules_to_array(mol_list_dict, mol_names)
 
-    para = Parallelizer()
+    para = Parallelizer(parallel_mode=parallel_mode, num_proc=num_proc)
     start_end_indices = get_triangle_indices(len(mol_names), para.num_proc - 1)
     kwargs = {"fp_array": fp_array, "mol_names": mol_names,
               "mol_indices_dict": mol_indices_dict, "overwrite": overwrite}
@@ -171,7 +174,16 @@ if __name__ == '__main__':
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('molecules_file', type=str,
                         help="""Path to SEA-format molecules file.""")
-    parser.add_argument('-o', '--overwrite', action="store_true",
+    parser.add_argument('-O', '--overwrite', action="store_true",
                         help="""Overwrite existing file(s).""")
+    parser.add_argument('-l', '--log', type=str, default=None,
+                        help="Log filename.")
+    parser.add_argument('-p', '--num_proc', type=int, default=None,
+                        help="""Set number of processors to use. Defaults to
+                             all available.""")
+    parser.add_argument('--parallel_mode', type=str, default=None,
+                        choices=list(ALL_PARALLEL_MODES),
+                        help="""Set parallelization mode to use.""")
     params = parser.parse_args()
-    main(params.molecules_file, overwrite=params.overwrite)
+    main(params.molecules_file, log=params.log, overwrite=params.overwrite,
+         parallel_mode=params.parallel_mode, num_proc=params.num_proc)
