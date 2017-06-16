@@ -3,7 +3,6 @@
 Author: Seth Axen
 E-mail: seth.axen@gmail.com
 """
-import array
 import os
 import sys
 import logging
@@ -55,20 +54,23 @@ def main(bin_files, np_file, out_mol_names_file):
         logging.info("Reading from {} ({}/{})".format(bin_file, i + 1,
                                                       file_count))
         with smart_open(bin_file, "rb") as f:
-            data_list = array.array('d', f.read()).tolist()
-            diff = len(data_list) - expect_size
+            buff = f.read()
+            data = np.frombuffer(buff, dtype=np.double)
+            data_size = data.shape[0]
+            diff = data_size - expect_size
             if diff > 0:
                 if diff == end_ind:  # handle old +1 error
                     logging.info("Trimming redundant row from file.")
-                    data_list = data_list[:-diff]
+                    data = data[:-diff]
+                    data_size = data.shape[0]
                 else:
                     sys.exit(
                         "Unexpected size difference in file: {}.".format(diff))
 
             logging.info("Adding values to memmap.")
-            memmap[data_count:data_count + len(data_list)] = data_list
+            memmap[data_count:data_count + data_size] = data
             memmap.flush()
-            data_count += len(data_list)
+            data_count += data_size
     del memmap
 
     if data_count != total_expect_size:
