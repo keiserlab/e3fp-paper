@@ -4,6 +4,7 @@ Author: Seth Axen
 E-mail: seth.axen@gmail.com
 """
 import array
+import os
 import sys
 import logging
 
@@ -20,11 +21,23 @@ def start_end_indices_from_fn(fn):
     return start_index, end_index
 
 
-def main(bin_files, mol_name_files, np_file, out_mol_names_file):
+def get_mol_name_file_from_bin_file(fn):
+    path = os.path.dirname(fn)
+    bn = os.path.basename(fn)
+    bn = "mol_names" + bn.split("_tcs")[1]
+    bn = bn.split(".bin")[0] + ".csv"
+    fn = os.path.join(path, bn)
+    if not os.path.isfile(fn):
+        fn += ".gz"
+    return fn
+
+
+def main(bin_files, np_file, out_mol_names_file):
     setup_logging()
     max_index = 0
     bin_files = sorted(bin_files, key=start_end_indices_from_fn)
-    mol_name_files = sorted(mol_name_files, key=start_end_indices_from_fn)
+    mol_name_files = [get_mol_name_file_from_bin_file(x)
+                      for x in bin_files]
 
     _, max_index = start_end_indices_from_fn(mol_name_files[-1])
     total_expect_size = get_batch_size(0, max_index)
@@ -78,15 +91,13 @@ def main(bin_files, mol_name_files, np_file, out_mol_names_file):
 
 if __name__ == "__main__":
     usage = ("python binary_to_numpy.py <binary_matrix_files> "
-             "<mol_name_files> <numpy_array_file> <mol_names_file>")
+             "<numpy_array_file> <mol_names_file>")
     try:
-        in_files = sys.argv[1:-2]
-        bin_files = in_files[:len(in_files) / 2]
-        mol_name_files = in_files[-len(in_files) / 2:]
+        bin_files = sys.argv[1:-2]
         np_file = sys.argv[-2]
         mol_names_file = sys.argv[-1]
     except:
         sys.exit(usage)
-    if len(bin_files) < 1 or len(mol_name_files) != len(bin_files):
+    if len(bin_files) < 1:
         sys.exit(usage)
-    main(bin_files, mol_name_files, np_file, mol_names_file)
+    main(bin_files, np_file, mol_names_file)
