@@ -5,9 +5,11 @@ E-mail: seth.axen@gmail.com
 """
 import array
 import sys
+import logging
 
 import numpy as np
 from python_utilities.io_tools import smart_open
+from python_utilities.scripting import setup_logging
 from get_triangle_indices import get_batch_size
 
 
@@ -19,34 +21,38 @@ def start_end_indices_from_fn(fn):
 
 
 def main(bin_files, mol_name_files, np_file, out_mol_names_file):
+    setup_logging()
     max_index = 0
     bin_files = sorted(bin_files, key=start_end_indices_from_fn)
     mol_name_files = sorted(mol_name_files, key=start_end_indices_from_fn)
 
     _, max_index = start_end_indices_from_fn(mol_name_files[-1])
     total_expect_size = get_batch_size(0, max_index)
-    print("Instantiating memmap of length {} at {}.".format(
+    logging.info("Instantiating memmap of length {} at {}.".format(
         total_expect_size, np_file))
     memmap = np.memmap(np_file, mode="w+", dtype=np.double,
                        shape=(total_expect_size,))
 
+    file_count = len(bin_files)
     data_count = 0
-    for bin_file, mol_name_file in zip(bin_files, mol_name_files):
+    for i, (bin_file, mol_name_file) in enumerate(zip(bin_files,
+                                                      mol_name_files)):
         start_ind, end_ind = start_end_indices_from_fn(bin_file)
         expect_size = get_batch_size(start_ind, end_ind)
-        print("Reading from {}".format(bin_file))
+        logging.info("Reading from {} ({}/{})".format(bin_file, i + 1,
+                                                      file_count))
         with smart_open(bin_file, "rb") as f:
             data_list = array.array('d', f.read()).tolist()
             diff = len(data_list) - expect_size
             if diff > 0:
                 if diff == end_ind:  # handle old +1 error
-                    print("Trimming redundant row from file.")
+                    logging.info("Trimming redundant row from file.")
                     data_list = data_list[:-diff]
                 else:
                     sys.exit(
                         "Unexpected size difference in file: {}.".format(diff))
 
-            print("Adding values to memmap.")
+            logging.info("Adding values to memmap.")
             memmap[data_count:data_count + len(data_list)] = data_list
             memmap.flush()
             data_count += len(data_list)
@@ -57,7 +63,7 @@ def main(bin_files, mol_name_files, np_file, out_mol_names_file):
             data_count, total_expect_size))
 
     mol_names_list = []
-    print("Reading mol names from {}.".format(mol_name_file))
+    logging.info("Reading mol names from {}.".format(mol_name_file))
     with smart_open(mol_name_file, "rb") as f:
         for line in f.readlines():
             mol_names_list.append(line.rstrip())
@@ -65,7 +71,7 @@ def main(bin_files, mol_name_files, np_file, out_mol_names_file):
         sys.exit("Number of mol names {} doesn't match data {}.".format(
             len(mol_names_list), max_index + 1))
 
-    print("Saving mol names to {}.".format(out_mol_names_file))
+    logging.info("Saving mol names to {}.".format(out_mol_names_file))
     with smart_open(out_mol_names_file, "w") as f:
         f.write("\n".join(mol_names_list) + "\n")
 
