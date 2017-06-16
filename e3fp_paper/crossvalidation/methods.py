@@ -31,23 +31,31 @@ RESULTS_DTYPE = np.float64
 
 class CVMethod(object):
 
-    """Base class for running cross-validation."""
+    """Base class for running cross-validation.
+
+    Attributes
+    ----------
+    out_dir : str
+        Directory in which to save any output files.
+    overwrite : bool
+        Overwrite any output files if they already exist.
+    """
 
     default_pred = 0.  # Default value if pair missing from results
     fit_file_ext = ".csv.bz2"
 
-    def __init__(self, out_dir="", overwrite=False):
-        """Initialize object.
+    def __init__(self):
+        """Initialize object."""
+        self.out_dir = "./"
+        self.overwrite = False
 
-        Parameters
-        ----------
-        out_dir : str, optional
-            Directory in which to save any output files during initialization.
-        overwrite : bool, optional
-            Overwrite any output files if they already exist.
-        """
-        self.out_dir = out_dir
-        self.overwrite = overwrite
+    @property
+    def out_dir(self):
+        return self._out_dir
+
+    @out_dir.setter
+    def out_dir(self, out_dir):
+        self._out_dir = out_dir
 
     def train(self, fp_array, mol_to_fp_inds, target_mol_array,
               target_list, mol_list, mask):
@@ -135,22 +143,52 @@ class RandomCVMethod(CVMethod):
 
 class SEASearchCVMethod(CVMethod):
 
-    """Cross-validation method using the Similarity Ensemble Approach."""
+    """Cross-validation method using the Similarity Ensemble Approach.
+
+    Attributes
+    ----------
+    out_dir : str
+        Directory in which to save any output files.
+    fit_file : str
+        File in which to save background fit.
+    library_file : str
+        SEA library file in which to store training data for searching.
+    train_molecules_file : str
+        SEA molecules file storing molecules for training.
+    train_targets_file : str
+        SEA molecules file storing targets for training.
+    test_molecules_file : str
+        SEA molecules file storing molecules for testing.
+    test_targets_file : str
+        SEA molecules file storing targets for testing.
+    overwrite : bool
+        Overwrite any output files if they already exist.
+    """
 
     fit_file_ext = ".sea"
 
-    def __init__(self, out_dir="", overwrite=False):
-        super(SEASearchCVMethod, self).__init__(out_dir=out_dir)
+    def __init__(self, *args, **kwargs):
+        self.library_file = None
+        self.fit_file = None
+        self.train_molecules_file = None
+        self.train_targets_file = None
+        self.test_molecules_file = None
+        self.test_targets_file = None
+        super(SEASearchCVMethod, self).__init__(*args, **kwargs)
+
+    @CVMethod.out_dir.setter
+    def out_dir(self, out_dir):
+        CVMethod.out_dir.fset(self, out_dir)
         self.library_file = os.path.join(self.out_dir, "library.sea")
         self.fit_file = os.path.join(self.out_dir, "library.fit")
-        self.train_molecules_file = os.path.join(
-            self.out_dir, "train_molecules.csv.bz2")
-        self.train_targets_file = os.path.join(
-            self.out_dir, "train_targets.csv.bz2")
-        self.test_molecules_file = os.path.join(
-            self.out_dir, "test_molecules.csv.bz2")
-        self.test_targets_file = os.path.join(
-            self.out_dir, "test_targets.csv.bz2")
+        self.train_molecules_file = os.path.join(self.out_dir,
+                                                 "train_molecules.csv.bz2")
+        self.train_targets_file = os.path.join(self.out_dir,
+                                               "train_targets.csv.bz2")
+        self.test_molecules_file = os.path.join(self.out_dir,
+                                                "test_molecules.csv.bz2")
+        self.test_targets_file = os.path.join(self.out_dir,
+                                              "test_targets.csv.bz2")
 
     def train(self, fp_array, mol_to_fp_inds, target_mol_array,
               target_list, mol_list, mask):
@@ -260,7 +298,17 @@ class SEASearchCVMethod(CVMethod):
 
 class ClassifierCVMethodBase(CVMethod):
 
-    """Base class for defining classifier methods."""
+    """Base class for defining classifier methods.
+
+    Attributes
+    ----------
+    out_dir : str
+        Directory in which to save any output files.
+    fit_dir : str
+        Directory in which to store target fits.
+    overwrite : bool
+        Overwrite any output files if they already exist.
+    """
 
     dtype = np.float64
     dense_data = False
@@ -270,9 +318,13 @@ class ClassifierCVMethodBase(CVMethod):
     train_sample_negatives = False
 
     def __init__(self, *args, **kwargs):
+        self.fit_dir = None
         super(ClassifierCVMethodBase, self).__init__(*args, **kwargs)
+
+    @CVMethod.out_dir.setter
+    def out_dir(self, out_dir):
+        CVMethod.out_dir.fset(self, out_dir)
         self.fit_dir = os.path.join(self.out_dir, "target_fits")
-        touch_dir(self.fit_dir)
 
     @classmethod
     def create_clf(cls, data=None):
@@ -391,6 +443,7 @@ class ClassifierCVMethodBase(CVMethod):
             fp_array = fp_array.toarray()
         fp_array = fp_array.astype(self.dtype)
 
+        touch_dir(self.fit_dir)
         logging.info("Generating target fits.")
         target_num = len(target_list)
         target_perc_num = int(target_num / 100)

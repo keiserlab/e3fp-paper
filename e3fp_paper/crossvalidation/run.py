@@ -6,6 +6,7 @@ E-mail: seth.axen@gmail.com
 import os
 import logging
 import cPickle as pkl
+import copy
 
 import numpy as np
 from scipy.sparse import issparse
@@ -122,7 +123,7 @@ class KFoldCrossValidator(object):
     """Class to perform k-fold cross-validation."""
 
     def __init__(self, k=5, splitter=MoleculeSplitter,
-                 cv_method_class=SEASearchCVMethod, input_processor=None,
+                 cv_method=SEASearchCVMethod(), input_processor=None,
                  parallelizer=None, out_dir=os.getcwd(), overwrite=False,
                  return_auc_type="roc", reduce_negatives=False,
                  fold_kwargs={}):
@@ -132,11 +133,13 @@ class KFoldCrossValidator(object):
             assert splitter.k == k
             self.splitter = splitter
         self.k = k
-        if (cv_method_class is SEASearchCVMethod and
-            input_processor is not None):
+        if (cv_method is SEASearchCVMethod and
+                input_processor is not None):
             raise ValueError(
                 "Input processing is not (currently) compatible with SEA.")
-        self.cv_method_class = cv_method_class
+        if isinstance(cv_method, type):
+            cv_method = cv_method()
+        self.cv_method = cv_method
         self.input_processor = input_processor
         self.overwrite = overwrite
         if parallelizer is None:
@@ -154,11 +157,11 @@ class KFoldCrossValidator(object):
             overwrite=False):
         fold_validators = {
             fold_num: FoldValidator(fold_num, self._get_fold_dir(fold_num),
-                                    cv_method_class=self.cv_method_class,
+                                    cv_method=copy.deepcopy(self.cv_method),
                                     input_file=self.input_file,
                                     overwrite=self.overwrite,
                                     **self.fold_kwargs)
-           for fold_num in range(self.k)}
+            for fold_num in range(self.k)}
         if not os.path.isfile(self.input_file) or not all(
                 [x.fold_files_exist() for x in fold_validators.values()]):
             logging.info("Loading and filtering input files.")
@@ -168,7 +171,8 @@ class KFoldCrossValidator(object):
                                                   affinity=affinity)
 
             mol_list = sorted(mol_list_dict.keys())
-            if self.cv_method_class is SEASearchCVMethod:  # efficiency hack
+            if isinstance(self.cv_method, SEASearchCVMethod):
+                # efficiency hack
                 fp_array, mol_to_fp_inds = (None, None)
             else:
                 logging.info("Converting inputs to arrays.")
@@ -277,7 +281,7 @@ class FoldValidator(object):
 
     """Class to perform validation on a single fold."""
 
-    def __init__(self, fold_num, out_dir, cv_method_class=SEASearchCVMethod,
+    def __init__(self, fold_num, out_dir, cv_method=SEASearchCVMethod(),
                  input_file=os.path.join(os.getcwd(), "input.pkl.bz2"),
                  compute_combined=True, overwrite=False):
         self.fold_num = fold_num
@@ -289,7 +293,9 @@ class FoldValidator(object):
         self.target_aucs_file = os.path.join(out_dir, "target_aucs.pkl.bz2")
         self.combined_roc_file = os.path.join(out_dir, "combined_roc.pkl.bz2")
         self.combined_prc_file = os.path.join(out_dir, "combined_prc.pkl.bz2")
-        self.cv_method = cv_method_class(out_dir=out_dir, overwrite=overwrite)
+        cv_method.out_dir = out_dir
+        cv_method.overwrite = overwrite
+        self.cv_method = cv_method
         self.compute_combined = compute_combined
         self.overwrite = overwrite
 

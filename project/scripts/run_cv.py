@@ -54,7 +54,7 @@ def main(molecules_file="molecules.csv.bz2", targets_file="targets.csv.bz2",
     kfold_cv = KFoldCrossValidator(k=5, parallelizer=parallelizer,
                                    splitter=splitter,
                                    input_processor=processor,
-                                   cv_method_class=cv_class,
+                                   cv_method=cv_class,
                                    return_auc_type=auc_type, out_dir=out_dir,
                                    overwrite=overwrite)
     auc = kfold_cv.run(molecules_file, targets_file, min_mols=min_mols,
