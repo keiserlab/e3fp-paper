@@ -7,12 +7,18 @@ from __future__ import division
 import logging
 import csv
 import argparse
+from collections import Counter
+try:
+    from itertools import izip as zip
+except ImportError:  # Python 3
+    pass
 
 import numpy as np
 from python_utilities.scripting import setup_logging
 from python_utilities.io_tools import smart_open
 
 LOG_FREQ = .001
+MAX_CHUNK_SIZE = int(1e6)
 PRECISION = 3
 SEP = "\t"
 
@@ -42,15 +48,20 @@ def main(mfile1, mfile2, name1, name2, out_file, precision=PRECISION,
     # Count binned pairs
     pair_num = mmap1.shape[0]
     log_freq = int(log_freq * pair_num)
-    tc_pair_counts = {}
+    tc_pair_counts = Counter()
     logging.info("Binning pairs.")
-    for i in range(pair_num):
-        pair = (round(mmap1[i], precision), round(mmap2[i], precision))
-        try:
-            tc_pair_counts[pair] += 1
-        except KeyError:
-            tc_pair_counts[pair] = 1
-        if i and i % log_freq == 0:
+    mult = 10**precision
+    i = 0
+    indices_since_last_log = 0
+    while i < pair_num:
+        tcs_iter = zip(np.rint(mmap1[i:i + MAX_CHUNK_SIZE] * mult),
+                       np.rint(mmap2[i:i + MAX_CHUNK_SIZE] * mult))
+
+        tc_pair_counts.update(tcs_iter)
+        i += MAX_CHUNK_SIZE
+        indices_since_last_log += MAX_CHUNK_SIZE
+        if indices_since_last_log >= log_freq:
+            indices_since_last_log = 0
             logging.info("Binned {:d} of {:d} pairs ({:.1%})".format(
                 i, pair_num, i / pair_num))
 
@@ -60,7 +71,9 @@ def main(mfile1, mfile2, name1, name2, out_file, precision=PRECISION,
         writer = csv.writer(f, delimiter=SEP)
         writer.writerow([name1, name2, "Count"])
         for pair in sorted(tc_pair_counts):
-            writer.writerow([pair[0], pair[1], tc_pair_counts[pair]])
+            writer.writerow([round(pair[0] / mult, precision),
+                             round(pair[1] / mult, precision),
+                             tc_pair_counts[pair]])
     logging.info("Completed.")
 
 
