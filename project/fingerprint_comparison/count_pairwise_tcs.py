@@ -15,7 +15,7 @@ except ImportError:  # Python 3
 
 import numpy as np
 from python_utilities.scripting import setup_logging
-from python_utilities.parallel import Parallelizer
+from python_utilities.parallel import Parallelizer, ALL_PARALLEL_MODES
 from python_utilities.io_tools import smart_open
 
 LOG_FREQ = .001
@@ -65,7 +65,7 @@ def count_tcs(start_ind, end_ind, mfile1=None, mfile2=None,
 
 
 def main(mfile1, mfile2, name1, name2, out_file, precision=PRECISION,
-         log_freq=LOG_FREQ):
+         log_freq=LOG_FREQ, num_proc=None, parallel_mode=None):
     setup_logging()
     if not out_file:
         out_file = (name1.lower().replace('\s', '_') + "_" +
@@ -83,7 +83,7 @@ def main(mfile1, mfile2, name1, name2, out_file, precision=PRECISION,
     pair_num = mmap1.shape[0]
     del mmap1, mmap2
 
-    para = Parallelizer(parallel_mode="processes")
+    para = Parallelizer(parallel_mode=parallel_mode, num_proc=num_proc)
     num_proc = max(para.num_proc - 1, 1)
     chunk_bounds = np.linspace(-1, pair_num - 1, num_proc + 1, dtype=int)
     chunk_bounds = list(zip(chunk_bounds[:-1] + 1, chunk_bounds[1:]))
@@ -135,6 +135,13 @@ if __name__ == "__main__":
     parser.add_argument('-p', '--precision', type=int, default=PRECISION,
                         help="""Number of decimal points to use when
                              rounding.""")
+    parser.add_argument('--num_proc', type=int, default=None,
+                        help="""Set number of processors to use. Defaults to
+                             all.""")
+    parser.add_argument('--parallel_mode', type=str, default=None,
+                        choices=list(ALL_PARALLEL_MODES),
+                        help="""Set parallelization mode to use.""")
     params = parser.parse_args()
     args = params.mmap_files + params.names + [params.out_file]
-    main(*args, precision=params.precision)
+    main(*args, precision=params.precision, num_proc=params.num_proc,
+         parallel_mode=params.parallel_mode)
