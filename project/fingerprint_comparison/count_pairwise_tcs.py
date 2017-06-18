@@ -24,17 +24,21 @@ PRECISION = 3
 SEP = "\t"
 
 
-def load_mmap(fn):
-    logging.info("Loading memmap file {}.".format(fn))
+def load_mmap(fn, log=True):
+    if log:
+        logging.info("Loading memmap file {}.".format(fn))
     mmap = np.memmap(fn, mode="r", dtype=np.double)
-    logging.info("Loaded {} pairs from file.".format(mmap.shape[0]))
+    if log:
+        logging.info("Loaded {} pairs from file.".format(mmap.shape[0]))
     return mmap
 
 
-def count_tcs(start_ind, end_ind, mmap1=None, mmap2=None, precision=PRECISION,
-              log_freq=LOG_FREQ):
-    if mmap1 is None or mmap2 is None:
-        raise ValueError("memmaps are not valid.")
+def count_tcs(start_ind, end_ind, mfile1=None, mfile2=None,
+              precision=PRECISION, log_freq=LOG_FREQ):
+    if mfile1 is None or mfile2 is None:
+        raise ValueError("memmap files are not valid.")
+    mmap1 = load_mmap(mfile1, log=False)
+    mmap2 = load_mmap(mfile2, log=False)
 
     pair_num = end_ind - start_ind + 1
     log_freq = int(log_freq * pair_num)
@@ -77,6 +81,7 @@ def main(mfile1, mfile2, name1, name2, out_file, precision=PRECISION,
 
     # Count binned pairs
     pair_num = mmap1.shape[0]
+    del mmap1, mmap2
 
     para = Parallelizer(parallel_mode="processes")
     num_proc = max(para.num_proc - 1, 1)
@@ -86,7 +91,7 @@ def main(mfile1, mfile2, name1, name2, out_file, precision=PRECISION,
                                                                  chunk_bounds))
 
     logging.info("Counting TCs in chunks.")
-    kwargs = {"mmap1": mmap1, "mmap2": mmap2, "precision": precision,
+    kwargs = {"mfile1": mfile1, "mfile2": mfile2, "precision": precision,
               "log_freq": log_freq}
     results_iter = para.run_gen(count_tcs, chunk_bounds, kwargs=kwargs)
     tc_pair_counts = Counter()
