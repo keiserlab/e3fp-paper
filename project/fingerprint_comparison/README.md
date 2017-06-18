@@ -6,23 +6,37 @@ been generated and saved to `e3fp_molecules.csv.bz2` and
 in [`crossvalidation`](../crossvalidation/sea) for fingerprinting
 instructions.
 
-The script `compare_fingerprints.py` computes TCs between fingerprints
-for all pairs of molecules common between the two provided files.
-Where multiple fingerprints exist for a given molecule pair (e.g. 
-multiple conformers for E3FP or tautomers for ECFP4), the maximum
-TC between all fingerprint pairs across the two molecules is
-computed. This can be run with:
+## Computing Pairwise TCs
+
+For both sets of molecules files, run the following series of scripts. Where
+multiple fingerprints exist for a given molecule pair (e.g. multiple
+conformers for E3FP or tautomers for ECFP4), the maximum TC between all
+fingerprint pairs across the two molecules is computed. The results are
+multiple flat binary files, each consisting of a flattened lower (below-
+diagonal) pairwise TCs triangle matrix, corresponding to a contiguous chunk of
+the triangle matrix.
 
 ```bash
-python compare_fingerprints.py ecfp4_molecules.csv.bz2 e3fp_molecules.csv.bz2
+python get_fingerprint_tril_tcs.py <molecules_file>
 ```
 
-This produces two output files:
+Assemble binary files into a
+[NumPy memmap file](https://docs.scipy.org/doc/numpy/reference/generated/numpy.memmap.html).
+A memmap enables relatively quick look-up without needing to read many doubles
+into memory.
 
-- `ecfp_e3fp_tcs_counts.csv.bz2` contains counts of number of molecule pairs
-  per TC bin. Bins are used for space efficiency.
-- `ecfp_e3fp_tcs_examples.csv.bz2` contains up to 10 example molecules for
-  each TC bin. This allows examination of the types of molecules that appear
-  in different regions of TC space (see paper Figures 1a and 3).
+```bash
+python binary_to_numpy.py *bin.gz <out_memmap_file> <out_names_file>
+```
 
-As this comparison takes a long time to run, these files are regularly cached.
+## Binning TCs Comparisons
+
+For comparing two sets of pairwise TCs, first use the above approach to build
+the two pairwise TCs memmaps. Then, count the number of TCs pairs that map to
+specific values at a specified precision (number of decimal places). For ECFP4
+and E3FP, run
+
+```bash
+python count_pairwise_tcs.py <ecfp4_mmap_file> <e3fp_mmap_file> --names ECFP4 E3FP
+```
+which produces an output file `ecfp4_e3fp_tcs.csv.gz`.
