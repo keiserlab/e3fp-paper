@@ -15,6 +15,7 @@ except ImportError:  # Python 3
 
 import numpy as np
 from python_utilities.scripting import setup_logging
+from python_utilities.parallel import Parallelizer
 from python_utilities.io_tools import smart_open
 
 LOG_FREQ = .001
@@ -28,6 +29,35 @@ def load_mmap(fn):
     mmap = np.memmap(fn, mode="r", dtype=np.double)
     logging.info("Loaded {} pairs from file.".format(mmap.shape[0]))
     return mmap
+
+
+def count_tcs(start_ind, end_ind, mmap1=None, mmap2=None, precision=PRECISION,
+              log_freq=LOG_FREQ):
+    if mmap1 is None or mmap2 is None:
+        raise ValueError("memmaps are not valid.")
+
+    pair_num = end_ind - start_ind + 1
+    log_freq = int(log_freq * pair_num)
+    tc_pair_counts = Counter()
+    mult = 10**precision
+    i = 0
+    indices_since_last_log = 0
+    while i < pair_num:
+        chunk_start = i + start_ind
+        chunk_range = (chunk_start,
+                       min(chunk_start + MAX_CHUNK_SIZE, end_ind) + 1)
+        chunk_size = chunk_range[1] - chunk_range[0]
+        tcs_iter = zip(np.rint(mmap1[chunk_range[0]:chunk_range[1]] * mult),
+                       np.rint(mmap2[chunk_range[0]:chunk_range[1]] * mult))
+
+        tc_pair_counts.update(tcs_iter)
+        i += chunk_size
+        indices_since_last_log += chunk_size
+        if indices_since_last_log >= log_freq or i >= pair_num:
+            indices_since_last_log = 0
+            logging.info("Binned {:d} of {:d} pairs ({:.1%})".format(
+                i, pair_num, i / pair_num))
+    return tc_pair_counts
 
 
 def main(mfile1, mfile2, name1, name2, out_file, precision=PRECISION,
@@ -47,26 +77,28 @@ def main(mfile1, mfile2, name1, name2, out_file, precision=PRECISION,
 
     # Count binned pairs
     pair_num = mmap1.shape[0]
-    log_freq = int(log_freq * pair_num)
-    tc_pair_counts = Counter()
-    logging.info("Binning pairs.")
-    mult = 10**precision
-    i = 0
-    indices_since_last_log = 0
-    while i < pair_num:
-        tcs_iter = zip(np.rint(mmap1[i:i + MAX_CHUNK_SIZE] * mult),
-                       np.rint(mmap2[i:i + MAX_CHUNK_SIZE] * mult))
 
-        tc_pair_counts.update(tcs_iter)
-        i += MAX_CHUNK_SIZE
-        indices_since_last_log += MAX_CHUNK_SIZE
-        if indices_since_last_log >= log_freq:
-            indices_since_last_log = 0
-            logging.info("Binned {:d} of {:d} pairs ({:.1%})".format(
-                i, pair_num, i / pair_num))
+    para = Parallelizer(parallel_mode="processes")
+    num_proc = max(para.num_proc - 1, 1)
+    chunk_bounds = np.linspace(-1, pair_num - 1, num_proc + 1, dtype=int)
+    chunk_bounds = list(zip(chunk_bounds[:-1] + 1, chunk_bounds[1:]))
+    logging.info("Divided into {} chunks with ranges: {}".format(num_proc,
+                                                                 chunk_bounds))
+
+    logging.info("Counting TCs in chunks.")
+    kwargs = {"mmap1": mmap1, "mmap2": mmap2, "precision": precision,
+              "log_freq": log_freq}
+    results_iter = para.run_gen(count_tcs, chunk_bounds, kwargs=kwargs)
+    tc_pair_counts = Counter()
+    for chunk_counts, _ in results_iter:
+        if not isinstance(chunk_counts, dict):
+            logging.error("Results are not in dict form.")
+            continue
+        tc_pair_counts.update(chunk_counts)
 
     # Write pairs to file
     logging.info("Writing binned pairs to {}.".format(out_file))
+    mult = 10**precision
     with smart_open(out_file, "wb") as f:
         writer = csv.writer(f, delimiter=SEP)
         writer.writerow([name1, name2, "Count"])
