@@ -111,6 +111,13 @@ def main(mfile1, mfile2, name1, name2, out_file, precision=PRECISION,
             writer.writerow([round(pair[0] / mult, precision),
                              round(pair[1] / mult, precision),
                              tc_pair_counts[pair]])
+
+    total_counts = sum(tc_pair_counts.values())
+    if total_counts != pair_num:
+        logging.warning(
+            "Pair counts {} did not match expected number {}".format(
+                total_counts, pair_num))
+        return
     logging.info("Completed.")
 
 
