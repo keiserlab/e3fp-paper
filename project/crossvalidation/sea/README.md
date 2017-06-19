@@ -7,7 +7,7 @@ fingerprints with the desired parameter set. Second, we run the actual
 ## Generating Fingerprints
 
 For each of the E3FP-based fingerprints (E3FP, E3FP-nostereo, E2FP, E2FP-
-stereo), generate fingerprints by running within the directory:
+stereo, E3FP-RDKit), generate fingerprints by running within the directory:
 
 ```bash
 python $E3FP_PROJECT/scripts/generate_e3fp_fprints.py $E3FP_PROJECT/data/chembl20_proto_smiles.smi.bz2 params.cfg --sdf_dir $E3FP_PROJECT/conformer_generation/conformers_proto_rms0.5 -l fp_log.txt

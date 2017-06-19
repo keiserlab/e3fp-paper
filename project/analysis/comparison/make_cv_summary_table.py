@@ -22,6 +22,7 @@ E2FP_REPEAT_DIRS = [x for x in glob.glob(os.path.join(CV_BASEDIR, "e2fp*"))
 ECFP_CHIRAL_REPEAT_DIRS = glob.glob(os.path.join(CV_BASEDIR, "ecfp4-chiral*"))
 ECFP_REPEAT_DIRS = [x for x in glob.glob(os.path.join(CV_BASEDIR, "ecfp4*"))
                     if x not in ECFP_CHIRAL_REPEAT_DIRS]
+E3FP_RDKIT_REPEAT_DIRS = glob.glob(os.path.join(CV_BASEDIR, "e3fp-rdkit*"))
 CVSTATS_FILE_NAME = "table_1.txt"
 
 
@@ -63,11 +64,11 @@ def stats_from_cv_dirs(cv_dirs):
 
 if __name__ == "__main__":
     names = ["ECFP4", "ECFP4-Chiral", "E2FP", "E2FP-Stereo", "E3FP-NoStereo",
-             "E3FP"]
+             "E3FP", "E3FP-RDKit"]
     dirs_list = [ECFP_REPEAT_DIRS, ECFP_CHIRAL_REPEAT_DIRS,
                  E2FP_REPEAT_DIRS, E2FP_STEREO_REPEAT_DIRS,
                  E3FP_NOSTEREO_REPEAT_DIRS,
-                 E3FP_REPEAT_DIRS]
+                 E3FP_REPEAT_DIRS, E3FP_RDKIT_REPEAT_DIRS]
     stats = []
     for dirs in dirs_list:
         stats.append(stats_from_cv_dirs(dirs))
