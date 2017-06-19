@@ -23,15 +23,17 @@ The sections are best understood when browsed in the following order:
    [Spearmint](https://github.com/JasperSnoek/spearmint) to optimize the
    parameter set using *5*-fold cross-validation to determine the optimal
    parameters that produce high-performing fingerprints.
-3. [Cross-Validation](crossvalidation): E3FP and ECFP4 fingerprints are
+3. [Fingerprint Comparison](fingerprint_comparison): Compare E3FP and ECFP4
+   fingerprints by comparing the Tanimoto coefficients of molecule pairs.
+4. [Cross-Validation](crossvalidation): E3FP and ECFP4 fingerprints are
    generated, and *k*-fold cross-validation is applied to determine the
    performance of these fingerprints using various classifiers.
-4. [Experiment Prediction](experiment_prediction): Having optimized E3FP and
+5. [Experiment Prediction](experiment_prediction): Having optimized E3FP and
    assessed its performance relative to ECFP4 *in silico*, we here identify
    molecule-target pairs that are predicted by the Similarity Ensemble
    Approach (SEA) to bind with E3FP but not with ECFP4. A subset of these
    predictions were verified experimentally.
-5. [Analysis and Figures](analysis): This section contains all scripts
+6. [Analysis and Figures](analysis): This section contains all scripts
    necessary to generate figures, tables, and statistics that appeared in the
    paper.
 
