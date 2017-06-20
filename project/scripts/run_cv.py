@@ -17,12 +17,15 @@ from e3fp_paper.crossvalidation.methods import LinearSVMCVMethod, \
                                                NaiveBayesCVMethod, \
                                                NeuralNetCVMethod, \
                                                SEASearchCVMethod, \
-                                               RandomCVMethod
+                                               MaxTanimotoCVMethod,\
+                                               RandomCVMethod, \
+                                               ScoreMatrix
 
 
 CV_METHODS = {'sea': SEASearchCVMethod, 'nb': NaiveBayesCVMethod,
               'rf': RandomForestCVMethod, 'linsvm': LinearSVMCVMethod,
-              'nn': NeuralNetCVMethod, 'rand': RandomCVMethod}
+              'nn': NeuralNetCVMethod, 'rand': RandomCVMethod,
+              'maxtc': MaxTanimotoCVMethod}
 SPLITTERS = {'molecule': MoleculeSplitter, 'target': ByTargetMoleculeSplitter}
 AFFINITY_CHOICES = [0, 10, 100, 1000, 10000]
 PROCESS_CHOICES = ['union', 'mean', 'mean-boltzmann', 'first']
@@ -30,7 +33,7 @@ K = 5
 
 
 def main(molecules_file="molecules.csv.bz2", targets_file="targets.csv.bz2",
-         k=5, method='sea', auc_type='sum', process_inputs=None,
+         k=5, method='sea', tc_files=None, auc_type='sum', process_inputs=None,
          split_by='target', reduce_negatives=False, min_mols=50,
          affinity=10000, out_dir="./", overwrite=False, log=None,
          num_proc=None, parallel_mode=None, verbose=False):
@@ -40,6 +43,9 @@ def main(molecules_file="molecules.csv.bz2", targets_file="targets.csv.bz2",
     parallelizer = Parallelizer(parallel_mode=parallel_mode, num_proc=num_proc)
 
     cv_class = CV_METHODS[method]
+    if cv_class is MaxTanimotoCVMethod and tc_files is not None:
+        score_matrix = ScoreMatrix(*tc_files)
+        cv_class = cv_class(score_matrix)
     splitter_class = SPLITTERS[split_by]
     if isinstance(splitter_class, MoleculeSplitter):
         splitter = splitter_class(k=k)
@@ -76,6 +82,15 @@ if __name__ == "__main__":
                         default='sea',
                         help="""Type of classifier to use for training and
                              testing.""")
+    parser.add_argument('--tc_files', type=str, nargs=2, default=None,
+                        metavar=('memmap_file', 'mol_names_file'),
+                        help="""Files necessary to build pairwise Tanimoto
+                             matrix, to be used only with 'maxtc' method.
+                             memmap_file is a NumPy memory-mapped file of
+                             with a flat array of Tanimoto Coefficients (TC)
+                             from lower triangle of the pairwise TC matrix,
+                             while mol_names_file is a file with names of the
+                             mols in the matrix.""")
     parser.add_argument('--auc_type', type=str,
                         choices=['prc', 'roc', 'sum'], default='sum',
                         help="""Type of AUC to use for objective function.""")

@@ -138,8 +138,6 @@ class KFoldCrossValidator(object):
                 input_processor is not None):
             raise ValueError(
                 "Input processing is not (currently) compatible with SEA.")
-        if isinstance(cv_method, type):
-            cv_method = cv_method()
         self.cv_method = cv_method
         self.input_processor = input_processor
         self.overwrite = overwrite
@@ -296,6 +294,8 @@ class FoldValidator(object):
         self.target_aucs_file = os.path.join(out_dir, "target_aucs.pkl.bz2")
         self.combined_roc_file = os.path.join(out_dir, "combined_roc.pkl.bz2")
         self.combined_prc_file = os.path.join(out_dir, "combined_prc.pkl.bz2")
+        if isinstance(cv_method, type):
+            cv_method = cv_method()
         cv_method.out_dir = out_dir
         cv_method.overwrite = overwrite
         self.cv_method = cv_method
