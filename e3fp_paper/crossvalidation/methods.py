@@ -547,7 +547,7 @@ class ClassifierCVMethodBase(CVMethod):
         target_mol_row : ndarray of bool (n_mols,)
             Boolean array with True marking mols that bind to target and False
             marking implied negatives.
-        mask_row : ndarray of bool (n_targets, n_mols)
+        mask_row : ndarray of bool (n_mols,)
             Boolean array with positives marking mols in the dataset for the
             target.
         sample_negatives : bool, optional
@@ -649,7 +649,7 @@ class ClassifierCVMethodBase(CVMethod):
 
     def test(self, fp_array, mol_to_fp_inds, target_mol_array, target_list,
              mol_list, mask):
-        """Search test molecules against training targets using SEA.
+        """Score test molecules against training targets using classifier.
 
         Parameters
         ----------
