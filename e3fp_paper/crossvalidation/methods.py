@@ -141,6 +141,172 @@ class RandomCVMethod(CVMethod):
         return np.random.uniform(size=(len(target_list), len(mol_list)))
 
 
+class ScoreMatrix(object):
+
+    """Easily access members of a memory-mapped symmetric score matrix."""
+
+    def __init__(self, memmap_file, entry_names_file, perfect_score=1.,
+                 dtype=np.double):
+        self.memmap_file = memmap_file
+        self.array = None
+        self.dtype = dtype
+        self.entry_names_file = entry_names_file
+        self.entry_names = []
+        self.name_to_index_map = {}
+        self.perfect_score = 1.
+        self.shape = (0, 0)
+
+    def load(self):
+        """Load memmap file and entry names file."""
+        self.array = np.memmap(self.memmap_file, mode="r", dtype=self.dtype)
+        self.entry_names = []
+        with smart_open(self.entry_names_file, "r") as f:
+            for line in f:
+                line = line.rstrip()
+                if len(line) > 0:
+                    self.entry_names.append(line)
+        size = len(self.entry_names)
+        if self._get_tril_index_from_indices(
+                size - 1, size - 2) != self.array.shape[0] - 1:
+            raise ValueError(("Number of items in memmap does not match "
+                              "number of row names."))
+        self.shape = (size, size)
+        self.update_name_to_index_map()
+
+    def is_loaded(self):
+        return self.array is not None
+
+    def update_name_to_index_map(self):
+        self.name_to_index_map = {}
+        for i, entry_name in enumerate(self.entry_names):
+            self.name_to_index_map[entry_name] = i
+        if len(self.name_to_index_map) != len(self.entry_names):
+            raise ValueError("Not all row names are unique.")
+
+    @staticmethod
+    def _get_tril_index_from_indices(i, j):
+        """Map symmetric matrix indices to flat lower triangle indices."""
+        if i > j:
+            return i * (i - 1) // 2 + j
+        elif i < j:
+            return j * (j - 1) // 2 + i
+
+    def __getitem__(self, key):
+        """Get items by row/col name pair."""
+        if not self.is_loaded():
+            raise KeyError("Array has not yet been loaded.")
+        key1, key2 = key
+        if isinstance(key1, int) and isinstance(key2, int):
+            i, j = key1, key2
+        else:
+            i, j = self.name_to_index_map[key1], self.name_to_index_map[key2]
+        if i == j:
+            return self.perfect_score
+        k = self._get_tril_index_from_indices(i, j)
+        return self.array[k]
+
+
+class MaxTanimotoCVMethod(CVMethod):
+
+    def __init__(self, score_mat, *args, **kwargs):
+        super(MaxTanimotoCVMethod, self).__init__(*args, **kwargs)
+        self.score_mat = score_mat
+        self.train_target_mol_dict = {}
+
+    def is_trained(self, target_list):
+        if not self.score_mat.is_load():
+            return False
+        mat_mols = set(self.score_mat.entry_names)
+        target_mols = set.union(*self.train_target_mol_dict.values())
+        if target_mols.issubset(mat_mols):
+            return True
+        return False
+
+    def train(self, fp_array, mol_to_fp_inds, target_mol_array,
+              target_list, mol_list, mask):
+        """Train targets by storing mol names for later lookup.
+
+        Parameters
+        ----------
+        fp_array : ndarray or csr_matrix (n_fprints, n_bits)
+            Array with fingerprints as rows
+        mol_to_fp_inds : dict
+            Map from index of `mol_list` to indices for mol fingerprints in
+            `fp_array`
+        target_mol_array : ndarray of bool (n_targets, n_mols)
+            Boolean array with True marking mol/target binding pairs
+            and False marking implied negatives.
+        target_list : list of str
+            List of target names corresponding to rows of `target_mol_array`.
+        mol_list : list of str
+            List of mol names corresponding to columns of `target_mol_array`.
+        mask : ndarray of bool (n_targets, n_mols)
+            Boolean array with positives marking mol/target pairs in the
+            training dataset.
+        """
+        if self.is_trained(target_list) and not self.overwrite:
+            logging.info("All targets already trained.")
+            return
+
+        logging.info("Fitting targets.")
+        for i, target_key in enumerate(target_list()):
+            pos_mol_inds = np.where(target_mol_array[i, :] & mask[i, :])[0]
+            self.train_target_mol_dict[target_key] = pos_mol_inds
+        logging.info("Finished fitting targets.")
+
+    def test(self, fp_array, mol_to_fp_inds, target_mol_array, target_list,
+             mol_list, mask):
+        """Score test molecules against training targets by max Tanimoto.
+
+        Parameters
+        ----------
+        fp_array : ndarray or csr_matrix (n_fprints, n_bits)
+            Array with fingerprints as rows
+        mol_to_fp_inds : dict
+            Map from index of `mol_list` to indices for mol fingerprints in
+            `fp_array`
+        target_mol_array : ndarray of bool (n_targets, n_mols)
+            Boolean array with True marking mol/target binding pairs
+            and False marking implied negatives.
+        target_list : list of str
+            List of target names corresponding to rows of `target_mol_array`.
+        mol_list : list of str
+            List of mol names corresponding to columns of `target_mol_array`.
+        mask : ndarray of bool (n_targets, n_mols)
+            Boolean array with positives marking mol/target pairs in the
+            test dataset.
+
+        Returns
+        -------
+        ndarray of float64 (n_targets, n_mols)
+            Array of scores for target, mol pairs.
+        """
+        logging.info("Searching molecules against targets.")
+        target_num = len(target_list)
+        mol_num = len(mol_list)
+        results = np.ones(shape=(target_num, mol_num),
+                          dtype=RESULTS_DTYPE) * self.default_pred
+
+        for i, target_key in enumerate(target_list):
+            logging.debug("Searching {} against molecules ({}/{}).".format(
+                target_key.tid, i, target_num))
+
+            # get subset of test data
+            test_mol_inds = np.where(target_mol_array[i, :] & mask[i, :])[0]
+            test_mol_names = [mol_list[j] for j in test_mol_inds]
+            target_mol_names = self.train_target_mol_dict[target_key]
+
+            # perform test
+            scores = np.asarray([
+                self.get_max_score_all_combinations(mol, target_mol_names)
+                for mol in test_mol_names])
+            results[i, test_mol_inds] = scores
+        return results
+
+    def get_max_score_all_combinations(self, mol, mol_list):
+        return max(self.score_mat[mol, mol2] for mol2 in mol_list)
+
+
 class SEASearchCVMethod(CVMethod):
 
     """Cross-validation method using the Similarity Ensemble Approach.
