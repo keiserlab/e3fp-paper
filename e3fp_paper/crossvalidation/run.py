@@ -18,7 +18,8 @@ from python_utilities.parallel import Parallelizer
 from ..sea_utils.util import targets_to_dict, molecules_to_lists_dicts, \
                              mol_lists_targets_to_targets, \
                              lists_dicts_to_molecules, dict_to_targets, \
-                             targets_to_mol_lists_targets
+                             targets_to_mol_lists_targets, \
+                             filter_targets_by_molecules
 from .util import molecules_to_array, filter_targets_by_molnum, \
                   targets_to_array, train_test_dicts_from_mask, \
                   get_roc_prc_auc
@@ -263,13 +264,15 @@ class KFoldCrossValidator(object):
 
     def load_input_files(self, molecules_file, targets_file, min_mols=50,
                          affinity=None, overwrite=False):
-        mol_names_target_dict = mol_lists_targets_to_targets(
-            targets_to_dict(targets_file, affinity=affinity))
-        target_dict = filter_targets_by_molnum(mol_names_target_dict,
-                                               n=min_mols)
-        del mol_names_target_dict
         smiles_dict, mol_lists_dict, fp_type = molecules_to_lists_dicts(
             molecules_file)
+
+        mol_names_target_dict = mol_lists_targets_to_targets(
+            targets_to_dict(targets_file, affinity=affinity))
+        target_dict = filter_targets_by_molecules(mol_names_target_dict,
+                                                  mol_lists_dict)
+        del mol_names_target_dict
+        target_dict = filter_targets_by_molnum(target_dict, n=min_mols)
 
         return (smiles_dict, mol_lists_dict, fp_type), target_dict
 
