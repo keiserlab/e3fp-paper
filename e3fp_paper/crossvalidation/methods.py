@@ -214,7 +214,7 @@ class MaxTanimotoCVMethod(CVMethod):
         self.train_target_mol_dict = {}
 
     def is_trained(self, target_list):
-        if not self.score_mat.is_load():
+        if not self.score_mat.is_loaded():
             return False
         mat_mols = set(self.score_mat.entry_names)
         target_mols = set.union(*self.train_target_mol_dict.values())
@@ -248,10 +248,14 @@ class MaxTanimotoCVMethod(CVMethod):
             logging.info("All targets already trained.")
             return
 
+        if not self.score_mat.is_loaded():
+            self.score_mat.load()
+
         logging.info("Fitting targets.")
-        for i, target_key in enumerate(target_list()):
+        for i, target_key in enumerate(target_list):
             pos_mol_inds = np.where(target_mol_array[i, :] & mask[i, :])[0]
-            self.train_target_mol_dict[target_key] = pos_mol_inds
+            pos_mols = [mol_list[j] for j in pos_mol_inds]
+            self.train_target_mol_dict[target_key] = pos_mols
         logging.info("Finished fitting targets.")
 
     def test(self, fp_array, mol_to_fp_inds, target_mol_array, target_list,
