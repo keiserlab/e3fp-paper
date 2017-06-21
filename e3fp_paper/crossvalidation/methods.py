@@ -309,6 +309,10 @@ class MaxTanimotoCVMethod(CVMethod):
         results = np.ones(shape=(target_num, mol_num),
                           dtype=RESULTS_DTYPE) * self.default_pred
 
+        if self.score_mat is None and issparse(fp_array):
+            logging.info("Converting from sparse to dense fingerprints.")
+            fp_array = fp_array.toarray()
+
         for i, target_key in enumerate(target_list):
             logging.debug("Searching {} against molecules ({}/{}).".format(
                 target_key.tid, i, target_num))
