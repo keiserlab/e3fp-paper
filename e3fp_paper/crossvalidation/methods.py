@@ -266,15 +266,14 @@ class MaxTanimotoCVMethod(CVMethod):
 
         logging.info("Fitting targets.")
         for i, target_key in enumerate(target_list):
+            pos_mol_inds = np.where(target_mol_array[i, :] &
+                                    mask[i, :])[0]
             if self.score_mat is not None:
-                pos_mol_inds = np.where(target_mol_array[i, :] &
-                                        mask[i, :])[0]
-                if self.score_mat is not None:
-                    pos_mols = [mol_list[j] for j in pos_mol_inds]
-                    self.train_target_mol_dict[target_key] = pos_mols
-                else:
-                    self.train_target_fp_inds_dict[target_key] = [
-                        y for x in pos_mol_inds for y in mol_to_fp_inds[x]]
+                pos_mols = [mol_list[j] for j in pos_mol_inds]
+                self.train_target_mol_dict[target_key] = pos_mols
+            else:
+                self.train_target_fp_inds_dict[target_key] = [
+                    y for x in pos_mol_inds for y in mol_to_fp_inds[x]]
         logging.info("Finished fitting targets.")
 
     def test(self, fp_array, mol_to_fp_inds, target_mol_array, target_list,
