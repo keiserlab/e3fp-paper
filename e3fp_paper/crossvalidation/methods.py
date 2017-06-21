@@ -208,18 +208,25 @@ class ScoreMatrix(object):
 
 class MaxTanimotoCVMethod(CVMethod):
 
-    def __init__(self, score_mat, *args, **kwargs):
+    def __init__(self, score_mat=None, *args, **kwargs):
         super(MaxTanimotoCVMethod, self).__init__(*args, **kwargs)
         self.score_mat = score_mat
         self.train_target_mol_dict = {}
+        self.train_fp_array = None
+        self.train_target_fp_inds_dict = {}
 
     def is_trained(self, target_list):
-        if not self.score_mat.is_loaded():
-            return False
-        mat_mols = set(self.score_mat.entry_names)
-        target_mols = set.union(*self.train_target_mol_dict.values())
-        if target_mols.issubset(mat_mols):
-            return True
+        if self.score_mat is not None:
+            if not self.score_mat.is_loaded():
+                return False
+            if set(target_list).issubset(self.train_target_mol_dict.keys()):
+                return True
+        else:
+            if not self.train_fp_array:
+                return False
+            if set(target_list).issubset(
+                    self.train_target_fp_inds_dict.keys()):
+                return True
         return False
 
     def train(self, fp_array, mol_to_fp_inds, target_mol_array,
@@ -248,14 +255,26 @@ class MaxTanimotoCVMethod(CVMethod):
             logging.info("All targets already trained.")
             return
 
-        if not self.score_mat.is_loaded():
-            self.score_mat.load()
+        if self.score_mat is not None:
+            if not self.score_mat.is_loaded():
+                self.score_mat.load()
+        else:
+            if issparse(fp_array):
+                logging.info("Converting from sparse to dense fingerprints.")
+                fp_array = fp_array.toarray()
+            self.train_fp_array = fp_array
 
         logging.info("Fitting targets.")
         for i, target_key in enumerate(target_list):
-            pos_mol_inds = np.where(target_mol_array[i, :] & mask[i, :])[0]
-            pos_mols = [mol_list[j] for j in pos_mol_inds]
-            self.train_target_mol_dict[target_key] = pos_mols
+            if self.score_mat is not None:
+                pos_mol_inds = np.where(target_mol_array[i, :] &
+                                        mask[i, :])[0]
+                if self.score_mat is not None:
+                    pos_mols = [mol_list[j] for j in pos_mol_inds]
+                    self.train_target_mol_dict[target_key] = pos_mols
+                else:
+                    self.train_target_fp_inds_dict[target_key] = [
+                        y for x in pos_mol_inds for y in mol_to_fp_inds[x]]
         logging.info("Finished fitting targets.")
 
     def test(self, fp_array, mol_to_fp_inds, target_mol_array, target_list,
@@ -297,13 +316,30 @@ class MaxTanimotoCVMethod(CVMethod):
 
             # get subset of test data
             test_mol_inds = np.where(target_mol_array[i, :] & mask[i, :])[0]
-            test_mol_names = [mol_list[j] for j in test_mol_inds]
-            target_mol_names = self.train_target_mol_dict[target_key]
 
-            # perform test
-            scores = np.asarray([
-                self.get_max_score_all_combinations(mol, target_mol_names)
-                for mol in test_mol_names])
+            if self.score_mat is not None:
+                test_mol_names = [mol_list[j] for j in test_mol_inds]
+                target_mol_names = self.train_target_mol_dict[target_key]
+
+                # perform test
+                scores = np.asarray([
+                    self.get_max_score_all_combinations(mol, target_mol_names)
+                    for mol in test_mol_names])
+
+            else:
+                target_fp_inds = self.train_target_fp_inds_dict[target_key]
+                test_mol_fp_start_inds = []
+                test_fp_inds = []
+                for x in test_mol_inds:
+                    mol_fp_inds = mol_to_fp_inds[x]
+                    test_mol_fp_start_inds.append(len(test_fp_inds))
+                    test_fp_inds.extend(mol_fp_inds)
+
+                # perform test
+                tcs = tanimoto_kernel(self.train_fp_array[target_fp_inds, :],
+                                      fp_array[test_fp_inds, :])
+                scores = np.amax(tcs, axis=0)
+                scores = np.maximum.reduceat(scores, test_mol_fp_start_inds)
             results[i, test_mol_inds] = scores
         return results
 
