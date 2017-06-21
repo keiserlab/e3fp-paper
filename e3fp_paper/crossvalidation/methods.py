@@ -314,7 +314,7 @@ class MaxTanimotoCVMethod(CVMethod):
                 target_key.tid, i, target_num))
 
             # get subset of test data
-            test_mol_inds = np.where(target_mol_array[i, :] & mask[i, :])[0]
+            test_mol_inds = np.where(mask[i, :])[0]
 
             if self.score_mat is not None:
                 test_mol_names = [mol_list[j] for j in test_mol_inds]
