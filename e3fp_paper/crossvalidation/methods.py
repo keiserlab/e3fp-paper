@@ -23,6 +23,7 @@ from python_utilities.io_tools import smart_open, touch_dir
 from ..sea_utils.util import molecules_to_lists_dicts
 from ..sea_utils.library import build_library
 from ..sea_utils.run import sea_set_search
+from e3fp.fingerprint.metrics.array_metrics import tanimoto
 
 RANDOM_STATE = 42
 MIN_PVALUE_EXPONENT = math.log10(sys.float_info.epsilon * sys.float_info.min)
@@ -339,8 +340,8 @@ class MaxTanimotoCVMethod(CVMethod):
                     test_fp_inds.extend(mol_fp_inds)
 
                 # perform test
-                tcs = tanimoto_kernel(self.train_fp_array[target_fp_inds, :],
-                                      fp_array[test_fp_inds, :])
+                tcs = tanimoto(self.train_fp_array[target_fp_inds, :],
+                               fp_array[test_fp_inds, :])
                 scores = np.amax(tcs, axis=0)
                 scores = np.maximum.reduceat(scores, test_mol_fp_start_inds)
             results[i, test_mol_inds] = scores
@@ -783,42 +784,6 @@ class SKLearnCVMethodBase(ClassifierCVMethodBase):
         return clf.predict_proba(data)[:, 1]
 
 
-def tanimoto_kernel(X, Y=None):
-    """Compute the Tanimoto kernel between X and Y.
-
-    Data must be binary. This is not checked.
-
-    Parameters
-    ----------
-    X : array_like, sparse matrix
-        with shape (n_samples_X, n_features).
-    Y : array_like, sparse matrix (optional)
-        with shape (n_samples_Y, n_features).
-
-    Returns
-    -------
-    similarity_matrix : array of shape (n_samples_X, n_samples_Y)
-
-    References
-    ----------
-    ..[1] L. Ralaivola, S.J. Swamidass, H. Saigo, P. Baldi."Graph kernels for
-          chemical informatics." Neural Networks. 2005. 18(8): 1093-1110.
-          doi: 10.1.1.92.483
-    """
-    X, Y = check_pairwise_arrays(X, Y)
-    if issparse(X) or issparse(Y):  # ensure if one is sparse, all are sparse.
-        X = csr_matrix(X, copy=False)
-        Y = csr_matrix(Y, copy=False)
-        Xbits = np.sum(X, axis=1)
-        Ybits = np.sum(Y, axis=1)
-    else:
-        Xbits = np.sum(X, axis=1, keepdims=True)
-        Ybits = np.sum(Y, axis=1, keepdims=True)
-    XYbits = safe_sparse_dot(X, Y.T, dense_output=True)
-    with np.errstate(divide='ignore'):  # handle 0 in denominator
-        return np.asarray(np.nan_to_num(XYbits / (Xbits + Ybits.T - XYbits)))
-
-
 class SVMCVMethod(SKLearnCVMethodBase):
 
     """Cross-validation method using a Tanimoto Support Vector Machine classifier.
@@ -828,7 +793,7 @@ class SVMCVMethod(SKLearnCVMethodBase):
 
     default_pred = -np.inf  # max_dist_from_hyperplane_neg
     dense_data = True
-    kernel = staticmethod(tanimoto_kernel)
+    kernel = staticmethod(tanimoto)
     random_state = RANDOM_STATE
 
     @classmethod

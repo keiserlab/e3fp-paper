@@ -19,9 +19,9 @@ import numpy as np
 from python_utilities.io_tools import smart_open
 from python_utilities.scripting import setup_logging
 from python_utilities.parallel import Parallelizer, ALL_PARALLEL_MODES
+from e3fp.fingerprint.metrics.array_metrics import tanimoto
 from e3fp_paper.sea_utils.util import molecules_to_lists_dicts
 from e3fp_paper.crossvalidation.util import molecules_to_array
-from e3fp_paper.crossvalidation.methods import tanimoto_kernel
 from get_triangle_indices import get_triangle_indices, get_batch_size
 
 SAVE_FREQ = 1000000  # min number of mol pairs between saves
@@ -118,7 +118,7 @@ def run_batch(start_index, end_index, fp_array=None, mol_names=[],
 
         # Batch compute max Tanimotos
         if search_mol_names:
-            tcs = tanimoto_kernel(fp_array[fp_indices], search_array)
+            tcs = tanimoto(fp_array[fp_indices], search_array)
             max_tcs = np.amax(tcs, axis=0)
             max_tcs = np.maximum.reduceat(
                 max_tcs, search_mol_start_inds).tolist()
