@@ -18,3 +18,18 @@ See `README` instructions within [`drug_selection`](drug_selection) and [`target
 ## Searching Molecules against Targets
 
 See [`target_drug_search`](target_drug_search).
+
+## Computing Pairwise Tanimoto Coefficients (TCs)
+
+To compute all pairwise TCs between target-associated molecules and drug
+molecules for either E3FP or ECFP4, run
+```bash
+python ../fingerprint_comparison/get_pairwise_tcs.py <drug_molecules> <target_molecules> --memmap_file <mmap_file>
+```
+
+Then, to count the number of TCs pairs that map to specific values at a
+specified precision
+```bash
+python ../fingerprint_comparison/count_pairwise_tcs.py <ecfp4_mmap_file> <e3fp_mmap_file> --names ECFP4 E3FP
+```
+which produces an output file `ecfp4_e3fp_tcs.csv.gz`.
