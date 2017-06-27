@@ -187,24 +187,31 @@ class ScoreMatrix(object):
     @staticmethod
     def _get_tril_index_from_indices(i, j):
         """Map symmetric matrix indices to flat lower triangle indices."""
-        if i > j:
-            return i * (i - 1) // 2 + j
-        elif i < j:
-            return j * (j - 1) // 2 + i
+        i, j = np.atleast_2d(i).T, np.atleast_2d(j)
+        imat, jmat = np.maximum(i, j), np.minimum(i, j)
+        indices = imat * (imat - 1) // 2 + jmat
+        indices[imat - jmat == 0] = -1
+        return indices
+
+    @staticmethod
+    def _key_to_indices(self, key):
+        """Convert key or list of keys to array indices."""
+        if isinstance(key, int):
+            return key
+        elif isinstance(key, str):
+            return self.name_to_index_map[key]
+        else:
+            return [self.name_to_index_map.get(x, x) for x in key]
 
     def __getitem__(self, key):
         """Get items by row/col name pair."""
         if not self.is_loaded():
             raise KeyError("Array has not yet been loaded.")
         key1, key2 = key
-        if isinstance(key1, int) and isinstance(key2, int):
-            i, j = key1, key2
-        else:
-            i, j = self.name_to_index_map[key1], self.name_to_index_map[key2]
-        if i == j:
-            return self.perfect_score
-        k = self._get_tril_index_from_indices(i, j)
-        return self.array[k]
+        key1 = self._key_to_indices(key1)
+        key2 = self._key_to_indices(key2)
+        indices = self._get_tril_index_from_indices(key1, key2)
+        return self.array[indices]
 
 
 class MaxTanimotoCVMethod(CVMethod):
@@ -326,10 +333,8 @@ class MaxTanimotoCVMethod(CVMethod):
                 target_mol_names = self.train_target_mol_dict[target_key]
 
                 # perform test
-                scores = np.asarray([
-                    self.get_max_score_all_combinations(mol, target_mol_names)
-                    for mol in test_mol_names])
-
+                tcs = self.score_mat[target_mol_names, test_mol_names]
+                scores = np.amax(tcs, axis=0)
             else:
                 target_fp_inds = self.train_target_fp_inds_dict[target_key]
                 test_mol_fp_start_inds = []
@@ -346,9 +351,6 @@ class MaxTanimotoCVMethod(CVMethod):
                 scores = np.maximum.reduceat(scores, test_mol_fp_start_inds)
             results[i, test_mol_inds] = scores
         return results
-
-    def get_max_score_all_combinations(self, mol, mol_list):
-        return max(self.score_mat[mol, mol2] for mol2 in mol_list)
 
 
 class SEASearchCVMethod(CVMethod):
