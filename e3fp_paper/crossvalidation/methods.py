@@ -191,8 +191,7 @@ class ScoreMatrix(object):
         indices[imat - jmat == 0] = -1
         return indices
 
-    @staticmethod
-    def _key_to_indices(key):
+    def _key_to_indices(self, key):
         """Convert key or list of keys to array indices."""
         if isinstance(key, int):
             return key
