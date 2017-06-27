@@ -10,10 +10,8 @@ import math
 import cPickle as pkl
 
 import numpy as np
-from scipy.sparse import issparse, csr_matrix
+from scipy.sparse import issparse
 from sklearn import svm
-from sklearn.metrics.pairwise import check_pairwise_arrays
-from sklearn.utils.extmath import safe_sparse_dot
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.naive_bayes import BernoulliNB, MultinomialNB
 from lasagne.layers import InputLayer, DenseLayer, DropoutLayer
