@@ -192,7 +192,7 @@ class ScoreMatrix(object):
         return indices
 
     @staticmethod
-    def _key_to_indices(self, key):
+    def _key_to_indices(key):
         """Convert key or list of keys to array indices."""
         if isinstance(key, int):
             return key
