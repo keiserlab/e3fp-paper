@@ -23,10 +23,11 @@ python get_fingerprint_tril_tcs.py <molecules_file>
 Assemble binary files into a
 [NumPy memmap file](https://docs.scipy.org/doc/numpy/reference/generated/numpy.memmap.html).
 A memmap enables relatively quick look-up without needing to read many doubles
-into memory.
+into memory. The format for a NumPy memmap file on disk is identical to the binary
+files generated above, so we only need to concatenate them.
 
 ```bash
-python binary_to_numpy.py *bin.gz <out_memmap_file> <out_names_file>
+cat $(ls *bin | sort -n -t - -k 2) > <out_memmap_file>
 ```
 
 ## Binning TCs Comparisons
