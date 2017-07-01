@@ -22,7 +22,7 @@ from ..sea_utils.util import targets_to_dict, molecules_to_lists_dicts, \
                              filter_targets_by_molecules
 from .util import molecules_to_array, filter_targets_by_molnum, \
                   targets_to_array, train_test_dicts_from_mask, \
-                  get_roc_prc_auc
+                  get_roc_prc_auc, enrichment_curve
 from .methods import SEASearchCVMethod
 
 MASK_DTYPE = np.byte
@@ -294,6 +294,8 @@ class FoldValidator(object):
         self.target_aucs_file = os.path.join(out_dir, "target_aucs.pkl.bz2")
         self.combined_roc_file = os.path.join(out_dir, "combined_roc.pkl.bz2")
         self.combined_prc_file = os.path.join(out_dir, "combined_prc.pkl.bz2")
+        self.combined_enrichment_file = os.path.join(
+            out_dir, "combined_enrichment.pkl.bz2")
         if isinstance(cv_method, type):
             cv_method = cv_method()
         cv_method.out_dir = out_dir
@@ -406,10 +408,22 @@ class FoldValidator(object):
                 pkl.dump(prc, f, pkl.HIGHEST_PROTOCOL)
             del prc
 
+            logging.debug(
+                "Computing combined enrichment curve (fold {})".format(
+                    self.fold_num))
+            enrichment = enrichment_curve(y_true, y_score)
+            auec = auc(enrichment[0], enrichment[1])
+            with smart_open(self.combined_enrichment_file, "wb") as f:
+                pkl.dump(enrichment, f, pkl.HIGHEST_PROTOCOL)
+            del enrichment
+
             imbalance = get_imbalance(y_true)
             logging.info(("Fold {} produced an AUROC of {:.4f} and an AUPRC"
                           " of {:.4f}. ({:.4f} of data is positive)").format(
                               self.fold_num, auroc, auprc, imbalance))
+            logging.info(
+                "Fold {} produced an enrichment AUC of {:.4f}.".format(
+                    self.fold_num, auec))
 
             return (auroc, auprc)
         else:
