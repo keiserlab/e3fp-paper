@@ -292,7 +292,8 @@ def enrichment_curve(y_true, y_score):
     """Calculate enrichment (cumulative-recall) curve.
 
     Enrichment curve is true positive rate (sensitivity/recall) vs ranking
-    or percent of scores above a given threshold.
+    or percent of scores above a given threshold. The ratio of recall to
+    ranked percentage is the enrichment factor.
 
     This method is based on scikit-learn's ROC curve implementation.
 
