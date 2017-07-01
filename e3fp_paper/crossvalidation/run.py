@@ -22,7 +22,8 @@ from ..sea_utils.util import targets_to_dict, molecules_to_lists_dicts, \
                              filter_targets_by_molecules
 from .util import molecules_to_array, filter_targets_by_molnum, \
                   targets_to_array, train_test_dicts_from_mask, \
-                  get_roc_prc_auc, enrichment_curve
+                  save_cv_inputs, load_cv_inputs, get_roc_prc_auc, \
+                  enrichment_curve,
 from .methods import SEASearchCVMethod
 
 MASK_DTYPE = np.byte
@@ -184,10 +185,8 @@ class KFoldCrossValidator(object):
 
             if self.overwrite or not os.path.isfile(self.input_file):
                 logging.info("Saving arrays and labels to files.")
-                with smart_open(self.input_file, "wb") as f:
-                    pkl.dump((fp_array, mol_to_fp_inds, target_mol_array,
-                              target_list, mol_list), f,
-                             pkl.HIGHEST_PROTOCOL)
+                save_cv_inputs(self.input_file, fp_array, mol_to_fp_inds,
+                               target_mol_array, target_list, mol_list)
             del fp_array, mol_to_fp_inds
 
             logging.info("Splitting data into {} folds using {}.".format(
@@ -207,9 +206,8 @@ class KFoldCrossValidator(object):
                  mol_list, train_test_masks, target_dict, target_list)
         else:
             logging.info("Resuming from input and fold files.")
-            with smart_open(self.input_file, "rb") as f:
-                (fp_array, mol_to_fp_inds, target_mol_array,
-                 target_list, mol_list) = pkl.load(f)
+            (fp_array, mol_to_fp_inds, target_mol_array,
+             target_list, mol_list) = load_cv_inputs(self.input_file)
             total_imbalance = get_imbalance(target_mol_array)
             del (fp_array, mol_to_fp_inds, target_mol_array, target_list,
                  mol_list)
@@ -307,9 +305,8 @@ class FoldValidator(object):
     def run(self):
         logging.debug("Loading input files for fold. (fold {})".format(
             self.fold_num))
-        with smart_open(self.input_file, "rb") as f:
-            (fp_array, mol_to_fp_inds, target_mol_array,
-             target_list, mol_list) = pkl.load(f)
+        (fp_array, mol_to_fp_inds, target_mol_array,
+         target_list, mol_list) = load_cv_inputs(self.input_file)
 
         with smart_open(self.mask_file, "rb") as f:
             train_test_mask = pkl.load(f)

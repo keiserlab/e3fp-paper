@@ -180,6 +180,23 @@ def molecules_to_array(molecules, mol_list, dense=False, processor=None):
     return all_fps, mol_indices_dict
 
 
+def save_cv_inputs(fn, fp_array, mol_to_fp_inds, target_mol_array,
+                   target_list, mol_list):
+    """Save inputs necessary for all CV folds."""
+    with smart_open(fn, "wb") as f:
+        pkl.dump((fp_array, mol_to_fp_inds, target_mol_array,
+                  target_list, mol_list), f,
+                 pkl.HIGHEST_PROTOCOL)
+
+
+def load_cv_inputs(fn):
+    """Load inputs necessary for all CV folds."""
+    with smart_open(fn, "rb") as f:
+        (fp_array, mol_to_fp_inds, target_mol_array,
+         target_list, mol_list) = pkl.load(f)
+    return (fp_array, mol_to_fp_inds, target_mol_array, target_list, mol_list)
+
+
 def train_test_dicts_from_mask(mol_list_dict, mol_list, target_dict,
                                target_list, train_test_mask):
     test_inds = set(np.where(np.any(train_test_mask == 1, axis=0))[0])
