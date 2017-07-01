@@ -3,6 +3,7 @@
 Author: Seth Axen
 E-mail: seth.axen@gmail.com
 """
+from __future__ import division
 import os
 import glob
 import re
@@ -285,6 +286,64 @@ def get_roc_prc_auc(true_false, metrics):
 
     return ((fpr, tpr, roc_thresh), auroc,
             (recall, precision, prc_thresh), auprc)
+
+
+def enrichment_curve(y_true, y_score):
+    """Calculate enrichment (cumulative-recall) curve.
+
+    Enrichment curve is true positive rate (sensitivity/recall) vs ranking
+    or percent of scores above a given threshold.
+
+    This method is based on scikit-learn's ROC curve implementation.
+
+    Parameters
+    ----------
+    y_true : ndarray
+        True binary labels.
+    y_score : ndarray
+        Scores.
+
+    Returns
+    -------
+    dbp : ndarray
+        Database percentage considered, where element i is the proportion of
+        predicted positives with score >= thresholds[i].
+    tpr : ndarray
+        Increasing true positive rates where element i is the true positive
+        rate of predictions with score >= thresholds[i].
+    thresholds : ndarray
+        Decreasing score values.
+    """
+    sorted_inds = np.argsort(y_score, kind="mergesort")[::-1]
+    y_score = y_score[sorted_inds]
+    y_true = y_true[sorted_inds]
+
+    unique_thresh_inds = np.where(np.diff(y_score))[0]
+    threshold_inds = np.r_[unique_thresh_inds, y_true.size - 1]
+
+    tps = np.cumsum(y_true)[threshold_inds]
+
+    tpr = tps / tps[-1]
+    db_perc = (threshold_inds + 1) / y_true.size
+    thresholds = y_score[threshold_inds]
+
+    if len(db_perc) > 2:
+        # Remove redundant points, for storage efficiency.
+        optimal_idxs = np.where(np.r_[True,
+                                      np.logical_or(np.diff(db_perc, 2),
+                                                    np.diff(tpr, 2)),
+                                      True])[0]
+        db_perc = db_perc[optimal_idxs]
+        tpr = tpr[optimal_idxs]
+        thresholds = thresholds[optimal_idxs]
+
+    if tps.size == 0 or db_perc[0] != 0:
+        # Add "0" point
+        tpr = np.r_[0, tpr]
+        db_perc = np.r_[0, db_perc]
+        thresholds = np.r_[thresholds[0] + 1, thresholds]
+
+    return db_perc, tpr, thresholds
 
 
 def get_auc(fp, tp, adjusted=False):
