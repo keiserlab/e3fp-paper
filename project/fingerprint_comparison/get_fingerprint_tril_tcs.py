@@ -155,9 +155,11 @@ def run_batch(start_index, end_index, fp_array=None, mol_names=[],
 
 
 def main(molecules_file, log=None, overwrite=False, parallel_mode=None,
-         num_proc=None):
+         num_proc=None, merge_confs=False):
     setup_logging(log)
     _, mol_list_dict, _ = molecules_to_lists_dicts(molecules_file)
+    if not merge_confs:
+        mol_list_dict = {x[1]: [x] for v in mol_list_dict.values() for x in v}
     mol_names = sorted(mol_list_dict)
     fp_array, mol_indices_dict = molecules_to_array(mol_list_dict, mol_names)
 
@@ -174,6 +176,9 @@ if __name__ == '__main__':
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('molecules_file', type=str,
                         help="""Path to SEA-format molecules file.""")
+    parser.add_argument('--merge_confs', action="store_true",
+                        help="""Merge adjacent conformers if they are the
+                             same molecule.""")
     parser.add_argument('-O', '--overwrite', action="store_true",
                         help="""Overwrite existing file(s).""")
     parser.add_argument('-l', '--log', type=str, default=None,
@@ -185,5 +190,6 @@ if __name__ == '__main__':
                         choices=list(ALL_PARALLEL_MODES),
                         help="""Set parallelization mode to use.""")
     params = parser.parse_args()
-    main(params.molecules_file, log=params.log, overwrite=params.overwrite,
+    main(params.molecules_file, merge_confs=params.merge_confs,
+         log=params.log, overwrite=params.overwrite,
          parallel_mode=params.parallel_mode, num_proc=params.num_proc)
