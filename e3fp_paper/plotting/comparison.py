@@ -46,6 +46,14 @@ def plot_tc_scatter(outlier_df, ax):
 def plot_tc_heatmap(counts_df, ax, outliers_df=None, cols=[], title="",
                     ref_line=True, fit_line=True, thresholds=[], cmap="bone_r",
                     limit=.5, set_auto_limits=False, logscale=True):
+    x, y = counts_df[cols[0]], counts_df[cols[1]]
+    non_nan_inds = ~(np.isnan(x) | np.isnan(y))
+    x, y = x[non_nan_inds], y[non_nan_inds]
+    try:
+        count = counts_df["Count"]
+        count = count[non_nan_inds]
+    except:
+        count = None
 
     if ref_line:
         ax.plot([0, 1], [0, 1], linewidth=1, color="gray", alpha=.5,
@@ -56,14 +64,14 @@ def plot_tc_heatmap(counts_df, ax, outliers_df=None, cols=[], title="",
                        linestyle='--', zorder=2)
             ax.axhline(ythresh, linewidth=1, color="forestgreen",
                        alpha=.75, linestyle='--', zorder=2)
-        slope, intercept, r2 = get_weighted_leastsq(x, y, weights=count)
-        ax.plot([0, 1], [intercept, slope + intercept], linewidth=1,
-                color="r", alpha=.75, linestyle="--", label="Trend", zorder=2)
-        print("Fit with slope {:.4f}, intercept {:.4f}, and R^2 {:.4f}".format(
-            slope, intercept, r2))
 
-    max_val = max(max(x), max(y), limit)
-    extent = (0, max_val, 0, max_val)
+    xmax, ymax = max(max(x), limit), max(max(y), limit)
+    if xmax <= 1 and ymax <= 1:
+        xmax = ymax = 1
+    xmin = ymin = 0
+    if set_auto_limits:
+        xmin, ymin = min(x), min(y)
+    extent = (xmin, xmax, ymin, ymax)
 
     norm = None
     if logscale:
@@ -77,9 +85,19 @@ def plot_tc_heatmap(counts_df, ax, outliers_df=None, cols=[], title="",
             ax.scatter(x, y, s=15, marker="x", facecolors="r",
                        edgecolors='none', alpha=.3, zorder=3)
 
-    ax.set_xlim(0., max_val + .02)
-    ax.set_ylim(0., max_val + .02)
-    ax.set_aspect('equal')
+    if fit_line:
+        slope, intercept, r2 = get_weighted_leastsq(x, y, weights=count)
+        ax.plot([xmin, xmax],
+                [slope * xmin + intercept, slope * xmax + intercept],
+                linewidth=1, color="r", alpha=.75, linestyle="--",
+                label="Trend", zorder=2)
+        print("Fit with slope {:.4f}, intercept {:.4f}, and R^2 {:.4f}".format(
+            slope, intercept, r2))
+
+    ax.set_xlim(xmin, xmax + .02)
+    ax.set_ylim(ymin, ymax + .02)
+    if xmax <= 1 and ymax <= 1:
+        ax.set_aspect('equal')
     ax.set_xlabel(cols[0], fontsize=fonts.ax_label_fontsize)
     ax.set_ylabel(cols[1], fontsize=fonts.ax_label_fontsize)
     ax.set_title(title, fontsize=fonts.title_fontsize)
@@ -109,8 +127,9 @@ def plot_tc_hists(counts_df, ax, cols=[], title="", colors=[], thresholds=[],
                                             "alpha": alpha,
                                             "zorder": 2 * i + 1,
                                             "weights": count})
-        ax.axvline(thresholds[i], linewidth=1, color=ref_line_colors[i],
-                   alpha=.75, linestyle='--', zorder=2 * i + 2)
+        if len(thresholds) > 0:
+            ax.axvline(thresholds[i], linewidth=1, color=ref_line_colors[i],
+                       alpha=.75, linestyle='--', zorder=2 * i + 2)
 
     ax.set_xlabel("TC", fontsize=fonts.ax_label_fontsize)
     ax.set_ylabel("Log Frequency", fontsize=fonts.ax_label_fontsize)
