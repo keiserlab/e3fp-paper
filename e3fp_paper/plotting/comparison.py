@@ -44,8 +44,8 @@ def plot_tc_scatter(outlier_df, ax):
 
 
 def plot_tc_heatmap(counts_df, ax, outliers_df=None, cols=[], title="",
-                    ref_line=True, thresholds=[], cmap="bone_r", limit=.5):
-    x, y, count = counts_df[cols[0]], counts_df[cols[1]], counts_df["Count"]
+                    ref_line=True, fit_line=True, thresholds=[], cmap="bone_r",
+                    limit=.5, set_auto_limits=False, logscale=True):
 
     if ref_line:
         ax.plot([0, 1], [0, 1], linewidth=1, color="gray", alpha=.5,
@@ -65,8 +65,11 @@ def plot_tc_heatmap(counts_df, ax, outliers_df=None, cols=[], title="",
     max_val = max(max(x), max(y), limit)
     extent = (0, max_val, 0, max_val)
 
-    ax.hexbin(x, y, C=count, cmap=cmap, norm=matplotlib.colors.LogNorm(),
-              gridsize=50, extent=extent, edgecolors='none', zorder=1)
+    norm = None
+    if logscale:
+        norm = matplotlib.colors.LogNorm()
+    ax.hexbin(x, y, C=count, cmap=cmap, norm=norm, gridsize=50, extent=extent,
+              edgecolors='none', zorder=1)
 
     if outliers_df is not None:
         x, y = outliers_df[cols[0]], outliers_df[cols[1]]
@@ -82,8 +85,10 @@ def plot_tc_heatmap(counts_df, ax, outliers_df=None, cols=[], title="",
     ax.set_title(title, fontsize=fonts.title_fontsize)
 
 
-def plot_tc_hists(counts_df, ax, cols=[], title="", colors=[], thresholds=[]):
-    ax.set_yscale("log")
+def plot_tc_hists(counts_df, ax, cols=[], title="", colors=[], thresholds=[],
+                  logscale=True):
+    if logscale:
+        ax.set_yscale("log")
     count = counts_df["Count"]
     ref_line_colors = ["royalblue", "forestgreen"]
     for i, col in enumerate(cols):
