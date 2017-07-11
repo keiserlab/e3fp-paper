@@ -23,7 +23,7 @@ from ..sea_utils.util import targets_to_dict, molecules_to_lists_dicts, \
 from .util import molecules_to_array, filter_targets_by_molnum, \
                   targets_to_array, train_test_dicts_from_mask, \
                   save_cv_inputs, load_cv_inputs, get_roc_prc_auc, \
-                  enrichment_curve,
+                  enrichment_curve
 from .methods import SEASearchCVMethod
 
 MASK_DTYPE = np.byte
