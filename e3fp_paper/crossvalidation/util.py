@@ -435,31 +435,37 @@ def get_youden_index(fp, tp, return_coordinate=False):
         return youden[index]
 
 
-def rocs_from_cv_dir(cv_dir, fold=None, basename="combined_roc"):
-    if fold is None or not isinstance(fold, int):
-        fold = "*"
-    print(os.path.join(cv_dir, "{}/{}.*".format(fold, basename)))
-    roc_files = glob.glob(
-        os.path.join(cv_dir, "{}/{}.*".format(fold, basename)))
-    roc_list = []
-    for fn in roc_files:
+def results_from_fold_dir(fold_dir, basename="combined"):
+    fns = glob.glob(os.path.join(fold_dir, "{}.*".format(basename)))
+    results_list = []
+    for fn in fns:
         logging.debug("Opening {}...".format(fn))
         with smart_open(fn, "rb") as f:
-            roc_list.append(pkl.load(f))
-    return roc_list
+            results_list.append(pkl.load(f))
+    return results_list
+
+
+def results_from_cv_dir(cv_dir, fold=None, basename="combined"):
+    if fold is None or not isinstance(fold, int):
+        fold = "*/"
+    fold_dirs = glob.glob(os.path.join(cv_dir, str(fold)))
+    results_list = []
+    for fold_dir in fold_dirs:
+        results_list.extend(results_from_fold_dir(fold_dir, basename=basename))
+    return results_list
+
+
+def rocs_from_cv_dir(cv_dir, fold=None, basename="combined_roc"):
+    return results_from_cv_dir(cv_dir, fold=fold, basename=basename)
 
 
 def prcs_from_cv_dir(cv_dir, fold=None, basename="combined_prc"):
-    if fold is None or not isinstance(fold, int):
-        fold = "*"
-    prc_files = glob.glob(
-        os.path.join(cv_dir, "{}/{}.*".format(fold, basename)))
-    prc_list = []
-    for fn in prc_files:
-        logging.debug("Opening {}...".format(fn))
-        with smart_open(fn, "rb") as f:
-            prc_list.append(pkl.load(f))
-    return prc_list
+    return results_from_cv_dir(cv_dir, fold=fold, basename=basename)
+
+
+def enrichments_from_cv_dir(cv_dir, fold=None,
+                            basename="combined_enrichment"):
+    return results_from_cv_dir(cv_dir, fold=fold, basename=basename)
 
 
 def prc_roc_aucs_from_cv_dirs(cv_dirs):
