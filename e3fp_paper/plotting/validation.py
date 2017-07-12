@@ -135,8 +135,9 @@ def plot_roc_curves(roc_lists, ax, y_min=0., names=None, colors=None,
             legend_loc = (.125, 0)
         else:
             legend_loc = 'lower center'
-        ax.legend(legend_lines, legend_names, loc=legend_loc,
-                  fontsize=legend_fontsize)
+        legend = ax.legend(legend_lines, legend_names, loc=legend_loc,
+                           fontsize=legend_fontsize, frameon=True)
+        legend.get_frame().set_linewidth(0)
 
 
 def plot_enrichment_curves(curve_lists, ax, *args, **kwargs):
