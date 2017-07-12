@@ -98,12 +98,14 @@ def library_fit(library_file, yes=False, testing=False, plot_prefix=None,
         library.close()
 
 
-def build_library(library_file, molecules_file, targets_file, fit_file,
+def build_library(library_file, molecules_file, targets_file, fit_file=None,
                   library_name=None, generate_fit=False, retry_num=RETRY_NUM,
                   no_plot=True, no_checks=True, log=True):
-    """Build library from input files, optionally generating fit."""
+    """Build library from input files. Generate fit if not provided."""
     out_fit_file = None
-    if generate_fit is True:
+    if (generate_fit or fit_file is None or
+            not os.path.isfile(fit_file)):
+        generate_fit = True
         out_fit_file = fit_file
         fit_file = None
 

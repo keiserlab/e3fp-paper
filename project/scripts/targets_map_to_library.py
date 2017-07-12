@@ -123,9 +123,8 @@ def library_from_map(targets_map_file, all_molecules_file, all_targets_file,
                             all_mol_lists_targets_dict)
             del all_mol_lists_targets_dict
         logging.info("Building library for fit molecules/targets.")
-        build_library(tmp_library_file, tmp_molecules_file,
-                      tmp_targets_file, fit_file,
-                      generate_fit=True, log=True, no_plot=False)
+        build_library(tmp_library_file, tmp_molecules_file, tmp_targets_file,
+                      fit_file, log=True, no_plot=False)
     else:
         logging.info("Fit file already exists. Skipping fit generation.")
 
@@ -133,7 +132,7 @@ def library_from_map(targets_map_file, all_molecules_file, all_targets_file,
 
     logging.info("Building library")
     build_library(library_file, molecules_file, targets_file, fit_file,
-                  generate_fit=False, log=True)
+                  log=True)
     logging.info("Library has been built.")
 
 

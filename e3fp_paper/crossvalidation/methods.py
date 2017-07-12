@@ -428,8 +428,7 @@ class SEASearchCVMethod(CVMethod):
         if (self.overwrite or not os.path.isfile(self.library_file) or
                               not os.path.isfile(self.fit_file)):
             build_library(self.library_file, self.train_molecules_file,
-                          self.train_targets_file, self.fit_file,
-                          generate_fit=True)
+                          self.train_targets_file, self.fit_file)
 
     def test(self, fp_array, mol_to_fp_inds, target_mol_array, target_list,
              mol_list, mask):
