@@ -139,6 +139,14 @@ def plot_roc_curves(roc_lists, ax, y_min=0., names=None, colors=None,
                   fontsize=legend_fontsize)
 
 
+def plot_enrichment_curves(curve_lists, ax, *args, **kwargs):
+    plot_roc_curves(curve_lists, ax, *args, **kwargs)
+    ax.set_ylabel("Fraction of Actives Found",
+                  fontsize=fonts.ax_label_fontsize)
+    ax.set_xlabel("Fraction of Database Screened",
+                  fontsize=fonts.ax_label_fontsize)
+
+
 def plot_prc_curves(prc_lists, ax, names=None, colors=None, linestyles=None,
                     ref_val=None, show_legend=True, only_best=True, title="",
                     alpha=1., legend_fontsize=fonts.legend_fontsize):
