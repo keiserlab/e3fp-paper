@@ -10,7 +10,7 @@ generated conformers.
 
 ## Download Dataset
 
-First, download a copy of the [scPDB](cheminfo.u-strasbg.fr/scPDB/) dataset,
+First, download a copy of the [scPDB](http://cheminfo.u-strasbg.fr/scPDB) dataset,
 and place it in `./scPDB`.
 
 ## Generate Input Files
