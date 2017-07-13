@@ -67,7 +67,7 @@ def get_num_mols(mol_names_file):
 
 
 def run_batch(molecules_file, batch_index, batch_num, overwrite=False,
-              merge_confs=False):
+              merge_confs=False, save_freq=SAVE_FREQ, compress=False):
     """Save pairwise TCs for specified region of lower triangle matrix."""
     _, mol_list_dict, _ = molecules_to_lists_dicts(molecules_file)
     if not merge_confs:
@@ -80,11 +80,18 @@ def run_batch(molecules_file, batch_index, batch_num, overwrite=False,
     start_end_indices = get_triangle_indices(len(mol_names), batch_num)
     start_index, end_index = start_end_indices[batch_index]
 
+    if compress:
+        binext = ".bin.gz"
+        csvext = ".csv.gz"
+    else:
+        binext = ".bin"
+        csvext = ".csv"
+
     base_output_name_strings = ['start-{0}'.format(start_index),
                                 'end-{0}'.format(end_index)]
-    max_tcs_file = '_'.join(['max_tcs'] + base_output_name_strings) + '.bin.gz'
+    max_tcs_file = '_'.join(['max_tcs'] + base_output_name_strings) + binext
     mol_names_file = ('_'.join(['mol_names'] + base_output_name_strings) +
-                      '.csv.gz')
+                      csvext)
 
     batch_size = get_batch_size(start_index, end_index)
     logging.info("Will save max tcs to {} and mol names to {}".format(
@@ -144,7 +151,7 @@ def run_batch(molecules_file, batch_index, batch_num, overwrite=False,
 
         # Cache results to file
         if (search_mol_names and index >= start_index and
-                (pairs_since_last_save >= SAVE_FREQ or
+                (pairs_since_last_save >= save_freq or
                  (end_index and index >= end_index))):
             total_pairs_searched += pairs_since_last_save
             perc_complete = total_pairs_searched / batch_size
@@ -166,7 +173,8 @@ def run_batch(molecules_file, batch_index, batch_num, overwrite=False,
 
 
 def main(molecules_file, log=None, overwrite=False, parallel_mode=None,
-         num_proc=None, merge_confs=False):
+         num_proc=None, merge_confs=False, save_freq=SAVE_FREQ,
+         compress=False):
     setup_logging(log)
     para = Parallelizer(parallel_mode=parallel_mode, num_proc=num_proc)
     if para.is_master():
@@ -175,8 +183,8 @@ def main(molecules_file, log=None, overwrite=False, parallel_mode=None,
     else:
         data_iter = iter([])
 
-    kwargs = {"overwrite": overwrite,
-              "merge_confs": merge_confs}
+    kwargs = {"overwrite": overwrite, "merge_confs": merge_confs,
+              "save_freq": save_freq, "compress": compress}
     para.run(run_batch, data_iter, kwargs=kwargs)
 
 
@@ -189,6 +197,11 @@ if __name__ == '__main__':
     parser.add_argument('--merge_confs', action="store_true",
                         help="""Merge adjacent conformers if they are the
                              same molecule.""")
+    parser.add_argument('--save_freq', type=int, default=SAVE_FREQ,
+                        help="""Minimum number of pairs checked between
+                             saves.""")
+    parser.add_argument('--compress', action="store_true",
+                        help="""Save gzipped files.""")
     parser.add_argument('-O', '--overwrite', action="store_true",
                         help="""Overwrite existing file(s).""")
     parser.add_argument('-l', '--log', type=str, default=None,
@@ -202,4 +215,5 @@ if __name__ == '__main__':
     params = parser.parse_args()
     main(params.molecules_file, merge_confs=params.merge_confs,
          log=params.log, overwrite=params.overwrite,
-         parallel_mode=params.parallel_mode, num_proc=params.num_proc)
+         parallel_mode=params.parallel_mode, num_proc=params.num_proc,
+         compress=params.compress, save_freq=params.save_freq)
