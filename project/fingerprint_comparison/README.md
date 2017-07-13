@@ -17,7 +17,7 @@ diagonal) pairwise TCs triangle matrix, corresponding to a contiguous chunk of
 the triangle matrix.
 
 ```bash
-python get_fingerprint_tril_tcs.py <molecules_file>
+python get_fingerprint_tril_tcs.py <molecules_file> --merge_confs
 ```
 
 Assemble binary files into a
