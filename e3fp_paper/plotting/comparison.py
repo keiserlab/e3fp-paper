@@ -104,7 +104,8 @@ def plot_tc_heatmap(counts_df, ax, outliers_df=None, cols=[], title="",
 
 
 def plot_tc_hists(counts_df, ax, cols=[], title="", colors=[], thresholds=[],
-                  logscale=True):
+                  logscale=True, show_legend=True,
+                  legend_fontsize=fonts.legend_fontsize):
     if logscale:
         ax.set_yscale("log")
     count = counts_df["Count"]
@@ -131,8 +132,14 @@ def plot_tc_hists(counts_df, ax, cols=[], title="", colors=[], thresholds=[],
             ax.axvline(thresholds[i], linewidth=1, color=ref_line_colors[i],
                        alpha=.75, linestyle='--', zorder=2 * i + 2)
 
+    if logscale:
+        ylabel = "Log Frequency"
+    else:
+        ylabel = "Frequency"
     ax.set_xlabel("TC", fontsize=fonts.ax_label_fontsize)
-    ax.set_ylabel("Log Frequency", fontsize=fonts.ax_label_fontsize)
+    ax.set_ylabel(ylabel, fontsize=fonts.ax_label_fontsize)
     ax.set_xlim(0, counts_df[cols].values.max())
     ax.set_title(title, fontsize=fonts.title_fontsize)
-    ax.legend(loc=1, fontsize=fonts.legend_fontsize)
+    if show_legend:
+        legend = ax.legend(loc=1, fontsize=legend_fontsize, frameon=True)
+        legend.get_frame().set_linewidth(0)
