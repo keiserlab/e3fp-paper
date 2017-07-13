@@ -185,7 +185,7 @@ def main(molecules_file, log=None, overwrite=False, parallel_mode=None,
             kwargs["fp_array"] = fp_array
     else:
         kwargs = {}
-        start_end_indices = iter()
+        start_end_indices = iter([])
     para.run(run_batch, start_end_indices, kwargs=kwargs)
 
 
