@@ -237,8 +237,9 @@ def plot_prc_curves(prc_lists, ax, names=None, colors=None, linestyles=None,
     ax.set_ylabel("Precision", fontsize=fonts.ax_label_fontsize)
     ax.set_title(title, fontsize=fonts.title_fontsize)
     if show_legend:
-        ax.legend(legend_lines, legend_names, loc='lower left',
-                  fontsize=legend_fontsize)
+        legend = ax.legend(legend_lines, legend_names, loc='lower left',
+                           fontsize=legend_fontsize, frameon=True)
+        legend.get_frame().set_linewidth(0)
 
 
 def plot_auc_stats(repeat_aucs_list, ax, names=None, colors=None,
