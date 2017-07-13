@@ -6,7 +6,7 @@ been generated and saved to `e3fp_molecules.csv.bz2` and
 in [`crossvalidation`](../crossvalidation/sea) for fingerprinting
 instructions.
 
-## Computing Pairwise TCs
+## Computing Pairwise Fingerprint TCs
 
 For both sets of molecules files, run the following series of scripts. Where
 multiple fingerprints exist for a given molecule pair (e.g. multiple
@@ -20,7 +20,34 @@ the triangle matrix.
 python get_fingerprint_tril_tcs.py <molecules_file> --merge_confs
 ```
 
-Assemble binary files into a
+## Computing Pairwise FastROCS Shape and Combo Tanimotos
+
+Run [FastROCS](https://docs.eyesopen.com/toolkits/python/fastrocstk/index.html)
+on the same set of conformers used for computing pairwise E3FP TCs above.
+First, concatenate the SDF files:
+
+```bash
+python sdf_files_to_file.py $E3FP_PROJECT/conformer_generation/conformers_proto_rms0.5 combined.sdf
+```
+
+We must manually split the lower triangle matrix into batches consisting of
+roughly equal numbers of pairs. 
+
+```bash
+python get_triangle_indices.py <mol_num> <batch_num>
+```
+
+This script prints out start and stop row indices (inclusive) for each batch.
+For each batch, run
+
+```bash
+python get_triangle_indices.py combined.sdf <start_index> <stop_index> --merge_confs
+```
+
+## Merging Batch Files
+
+Each of the above scripts produces multiple binary files. We need to assemble
+these into into a
 [NumPy memmap file](https://docs.scipy.org/doc/numpy/reference/generated/numpy.memmap.html).
 A memmap enables relatively quick look-up without needing to read many doubles
 into memory. The format for a NumPy memmap file on disk is identical to the binary
@@ -34,10 +61,10 @@ cat $(ls *bin | sort -n -t - -k 2) > <out_memmap_file>
 
 For comparing two sets of pairwise TCs, first use the above approach to build
 the two pairwise TCs memmaps. Then, count the number of TCs pairs that map to
-specific values at a specified precision (number of decimal places). For ECFP4
-and E3FP, run
+specific values at a specified precision (number of decimal places). For a
+given memmap pair, run
 
 ```bash
-python count_pairwise_tcs.py <ecfp4_mmap_file> <e3fp_mmap_file> --names ECFP4 E3FP
+python count_pairwise_tcs.py <mmap_file1> <mmap_file2> --names Name1 Name2
 ```
-which produces an output file `ecfp4_e3fp_tcs.csv.gz`.
+which produces an output file `name1_name2_tcs.csv.gz`.
