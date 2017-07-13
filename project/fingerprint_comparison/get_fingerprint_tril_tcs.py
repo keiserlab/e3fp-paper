@@ -66,10 +66,20 @@ def get_num_mols(mol_names_file):
     return i
 
 
-def run_batch(start_index, end_index, fp_array=None, molecules_file=None,
-              mol_names=[], mol_indices_dict={}, overwrite=False,
+def run_batch(molecules_file, batch_index, batch_num, overwrite=False,
               merge_confs=False):
     """Save pairwise TCs for specified region of lower triangle matrix."""
+    _, mol_list_dict, _ = molecules_to_lists_dicts(molecules_file)
+    if not merge_confs:
+        mol_list_dict = {
+            x[1]: [x] for v in mol_list_dict.values() for x in v}
+    mol_names = sorted(mol_list_dict)
+    fp_array, mol_indices_dict = molecules_to_array(mol_list_dict,
+                                                    mol_names)
+
+    start_end_indices = get_triangle_indices(len(mol_names), batch_num)
+    start_index, end_index = start_end_indices[batch_index]
+
     base_output_name_strings = ['start-{0}'.format(start_index),
                                 'end-{0}'.format(end_index)]
     max_tcs_file = '_'.join(['max_tcs'] + base_output_name_strings) + '.bin.gz'
@@ -79,14 +89,6 @@ def run_batch(start_index, end_index, fp_array=None, molecules_file=None,
     batch_size = get_batch_size(start_index, end_index)
     logging.info("Will save max tcs to {} and mol names to {}".format(
         max_tcs_file, mol_names_file))
-
-    if fp_array is None:
-        _, mol_list_dict, _ = molecules_to_lists_dicts(molecules_file)
-        if not merge_confs:
-            mol_list_dict = {x[1]: [x] for v in mol_list_dict.values()
-                             for x in v}
-        fp_array, mol_indices_dict = molecules_to_array(mol_list_dict,
-                                                        mol_names)
 
     total_pairs_searched = 0
     last_save_ind = -1
@@ -168,25 +170,14 @@ def main(molecules_file, log=None, overwrite=False, parallel_mode=None,
     setup_logging(log)
     para = Parallelizer(parallel_mode=parallel_mode, num_proc=num_proc)
     if para.is_master():
-        _, mol_list_dict, _ = molecules_to_lists_dicts(molecules_file)
-        if not merge_confs:
-            mol_list_dict = {
-                x[1]: [x] for v in mol_list_dict.values() for x in v}
-        mol_names = sorted(mol_list_dict)
-        fp_array, mol_indices_dict = molecules_to_array(mol_list_dict,
-                                                        mol_names)
-
-        start_end_indices = get_triangle_indices(len(mol_names),
-                                                 para.num_proc - 1)
-        kwargs = {"molecules_file": molecules_file, "mol_names": mol_names,
-                  "mol_indices_dict": mol_indices_dict, "overwrite": overwrite,
-                  "merge_confs": merge_confs}
-        if not para.is_mpi():
-            kwargs["fp_array"] = fp_array
+        data_iter = ((molecules_file, i, para.num_proc - 1)
+                     for i in range(para.num_proc - 1))
     else:
-        kwargs = {}
-        start_end_indices = iter([])
-    para.run(run_batch, start_end_indices, kwargs=kwargs)
+        data_iter = iter([])
+
+    kwargs = {"overwrite": overwrite,
+              "merge_confs": merge_confs}
+    para.run(run_batch, data_iter, kwargs=kwargs)
 
 
 if __name__ == '__main__':
