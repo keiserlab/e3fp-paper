@@ -166,19 +166,26 @@ def run_batch(start_index, end_index, fp_array=None, molecules_file=None,
 def main(molecules_file, log=None, overwrite=False, parallel_mode=None,
          num_proc=None, merge_confs=False):
     setup_logging(log)
-    _, mol_list_dict, _ = molecules_to_lists_dicts(molecules_file)
-    if not merge_confs:
-        mol_list_dict = {x[1]: [x] for v in mol_list_dict.values() for x in v}
-    mol_names = sorted(mol_list_dict)
-    fp_array, mol_indices_dict = molecules_to_array(mol_list_dict, mol_names)
-
     para = Parallelizer(parallel_mode=parallel_mode, num_proc=num_proc)
-    start_end_indices = get_triangle_indices(len(mol_names), para.num_proc - 1)
-    kwargs = {"molecules_file": molecules_file, "mol_names": mol_names,
-              "mol_indices_dict": mol_indices_dict, "overwrite": overwrite,
-              "merge_confs": merge_confs}
-    if not para.is_mpi():
-        kwargs["fp_array"] = fp_array
+    if para.is_master():
+        _, mol_list_dict, _ = molecules_to_lists_dicts(molecules_file)
+        if not merge_confs:
+            mol_list_dict = {
+                x[1]: [x] for v in mol_list_dict.values() for x in v}
+        mol_names = sorted(mol_list_dict)
+        fp_array, mol_indices_dict = molecules_to_array(mol_list_dict,
+                                                        mol_names)
+
+        start_end_indices = get_triangle_indices(len(mol_names),
+                                                 para.num_proc - 1)
+        kwargs = {"molecules_file": molecules_file, "mol_names": mol_names,
+                  "mol_indices_dict": mol_indices_dict, "overwrite": overwrite,
+                  "merge_confs": merge_confs}
+        if not para.is_mpi():
+            kwargs["fp_array"] = fp_array
+    else:
+        kwargs = {}
+        start_end_indices = iter()
     para.run(run_batch, start_end_indices, kwargs=kwargs)
 
 
