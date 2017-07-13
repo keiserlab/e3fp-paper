@@ -24,7 +24,7 @@ from e3fp_paper.sea_utils.util import molecules_to_lists_dicts
 from e3fp_paper.crossvalidation.util import molecules_to_array
 from get_triangle_indices import get_triangle_indices, get_batch_size
 
-SAVE_FREQ = 1000000  # min number of mol pairs between saves
+SAVE_FREQ = 10000000  # min number of mol pairs between saves
 
 
 def cache_tcs_to_binary(fn, tcs_tril):
