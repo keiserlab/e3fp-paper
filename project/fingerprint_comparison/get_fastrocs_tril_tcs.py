@@ -224,7 +224,7 @@ if __name__ == '__main__':
            between molecules.""",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('db_file', type=str,
-                        help="""Path to SEA-format molecules file.""")
+                        help="""Path to SDF input file.""")
     parser.add_argument('start_index', type=int,
                         help="""Index to start.""")
     parser.add_argument('end_index', type=int,
