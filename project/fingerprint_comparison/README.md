@@ -68,3 +68,11 @@ given memmap pair, run
 python count_pairwise_tcs.py <mmap_file1> <mmap_file2> --names Name1 Name2
 ```
 which produces an output file `name1_name2_tcs.csv.gz`.
+
+## All-By-All Comparisons of Random Conformers from Different Molecules
+
+See `[random_conformers]()` for specific instructions.
+
+## Pairwise Comparisons of Random Conformers of the Same Molecules
+
+See `[random_conformer_pairs]()` for specific instructions.
