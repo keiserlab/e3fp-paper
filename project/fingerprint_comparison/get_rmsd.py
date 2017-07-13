@@ -13,7 +13,6 @@ import argparse
 import numpy as np
 import rdkit.Chem
 from rdkit.Chem import rdMolAlign, rdFMCS
-from rdkit.Chem import AllChem
 from python_utilities.scripting import setup_logging
 from python_utilities.io_tools import smart_open
 from python_utilities.parallel import Parallelizer, ALL_PARALLEL_MODES
