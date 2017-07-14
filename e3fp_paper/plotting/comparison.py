@@ -3,6 +3,8 @@
 Author: Seth Axen
 E-mail: seth.axen@gmail.com
 """
+import math
+
 import numpy as np
 from scipy.optimize import curve_fit
 import matplotlib
@@ -70,7 +72,8 @@ def plot_tc_heatmap(counts_df, ax, outliers_df=None, cols=[], title="",
         xmax = ymax = 1
     xmin = ymin = 0
     if set_auto_limits:
-        xmin, ymin = min(x), min(y)
+        xmin, ymin = round(min(x)), round(min(y))
+        xmax, ymax = round(xmax), round(ymax)
     extent = (xmin, xmax, ymin, ymax)
 
     norm = None
@@ -98,6 +101,10 @@ def plot_tc_heatmap(counts_df, ax, outliers_df=None, cols=[], title="",
     ax.set_ylim(ymin, ymax + .02)
     if xmax <= 1 and ymax <= 1:
         ax.set_aspect('equal')
+    xticks = np.linspace(xmin, xmax, 5)
+    ax.set_xticks(xticks)
+    yticks = np.linspace(ymin, ymax, 5)
+    ax.set_yticks(yticks)
     ax.set_xlabel(cols[0], fontsize=fonts.ax_label_fontsize)
     ax.set_ylabel(cols[1], fontsize=fonts.ax_label_fontsize)
     ax.set_title(title, fontsize=fonts.title_fontsize)
