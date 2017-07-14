@@ -37,6 +37,8 @@ class DefaultColors(object):
         self.e2fp_stereo_color = (.2, .63, .17)
         self.e3fp_nostereo_color = (.94, .35, .35)
         self.e3fp_color = (1, .6, .18)
+        self.rocs_shape_color = (.41, .34, .52)
+        self.rocs_combo_color = (0, .18, .31)
         self.mol_colors = {'Alphaprodine': (0.216, 0.495, 0.720),
                            'Anpirtoline': (0.894, 0.102, 0.110),
                            'Cypenamine': (0.304, 0.683, 0.293)}
