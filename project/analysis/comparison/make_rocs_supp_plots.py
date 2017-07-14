@@ -56,7 +56,7 @@ def remove_bad_pairs(df):
 
 if __name__ == "__main__":
     # Overview ROCS vs fingerprints figure
-    fig = plt.figure(figsize=(5.5, 7))
+    fig = plt.figure(figsize=(5, 6.5))
     panel_axes = []
     panel_xoffsets = []
 
