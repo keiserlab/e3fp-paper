@@ -69,6 +69,34 @@ python count_pairwise_tcs.py <mmap_file1> <mmap_file2> --names Name1 Name2
 ```
 which produces an output file `name1_name2_tcs.csv.gz`.
 
+## Computing Enrichment Curves
+
+FastROCS output are pairwise shape and combo (shape + color) Tanimotos, as
+opposed to ECFP4's and E3FP's individual fingerprints. To compare the
+performance of all three approaches at enriching for actives, we perform
+*k*-fold cross-validation as [previously described](../crossvalidation), using
+as the threshold for fingerprints the maximum pairwise TC computed between the
+set of query molecule fingerprints and target molecule fingerprints, and for
+ROCS the shape or combo max TC between the query molecule conformers and target
+molecule conformers. The enrichment curve plots fraction of actives recovered
+(sensitivity) vs fraction of database screened.
+
+The MaxTC "classifier" can either dynamically compute the Tanimotos or read
+from a pre-computed memmap (see above). The former is significantly faster for
+fingerprints, due to the efficiency of large-scale TC computation.
+
+For fingerprints, run
+
+```bash
+python $E3FP_PROJECT/scripts/run_cv.py <molecules_file> $E3FP_PROJECT/data/chembl20_binding_targets.csv.bz2 --method maxtc --reduce_negatives -l cv_log.txt
+```
+
+For FastROCS comparisons, run
+
+```bash
+python $E3FP_PROJECT/scripts/run_cv.py <molecules_file> $E3FP_PROJECT/data/chembl20_binding_targets.csv.bz2 --method maxtc --tc_files <tcs_memmap_file> <mol_names_file> --reduce_negatives -l cv_log.txt
+```
+
 ## All-By-All Comparisons of Random Conformers from Different Molecules
 
 See [`random_conformers`](./random_conformers) for specific instructions.
