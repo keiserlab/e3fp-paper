@@ -45,10 +45,13 @@ def run(smiles_file, bits=1024, radius=2, use_chiral=False,
     for name, smiles in smiles_dict.iteritems():
         try:
             mol = mol_from_smiles(smiles, name)
+            logging.info("Generating fingerprint for {}".format(name))
             fp = fprint2d_from_mol(mol, bits=bits, radius=radius,
                                    use_chiral=use_chiral)
+            logging.info("Generated fingerprint for {}".format(name))
             mol_list_dict.setdefault(name, []).append(
                 fprint_to_native_tuple(fp))
+
         except Exception:
             logging.warning("Fingerprinting {} failed.".format(name))
     fp_type = get_fprint2d_fptype(bits=bits, radius=radius,
