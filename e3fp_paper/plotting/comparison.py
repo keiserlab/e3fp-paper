@@ -3,8 +3,6 @@
 Author: Seth Axen
 E-mail: seth.axen@gmail.com
 """
-import math
-
 import numpy as np
 from scipy.optimize import curve_fit
 import matplotlib
