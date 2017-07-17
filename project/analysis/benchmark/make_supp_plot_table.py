@@ -164,7 +164,8 @@ if __name__ == "__main__":
         scaled_total_df[linear_cols] * SCALE_TO / SCALE_FROM)
     scaled_total_df[expon_cols] = scaled_total_df[expon_cols] * (
         SCALE_TO * (SCALE_TO - 1)) / (SCALE_FROM * (SCALE_FROM - 1))
-    scaled_total_df['ROCS Pairwise (GPU)'] = get_runtime_stats_from_pairwise_log(SCALED_ROCS_TCS_LOG_FILES)
+    scaled_total_df['ROCS Pairwise (GPU)'] = get_runtime_stats_from_pairwise_log(
+        SCALED_ROCS_TCS_LOG_FILES)
     scaled_total_df['ROCS Pairwise (CPU)'] = gpu_secs_to_cpu_secs(
         scaled_total_df['ROCS Pairwise (GPU)'])
 
