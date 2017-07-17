@@ -41,7 +41,7 @@ This script prints out start and stop row indices (inclusive) for each batch.
 For each batch, run
 
 ```bash
-python get_triangle_indices.py combined.sdf <start_index> <stop_index> --merge_confs
+python get_fastrocs_tril_tcs.py combined.sdf <start_index> <stop_index> --merge_confs
 ```
 
 ## Merging Batch Files
