@@ -6,6 +6,7 @@ E-mail: seth.axen@gmail.com
 import os
 import logging
 
+import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 import seaborn as sns
@@ -24,13 +25,17 @@ PROJECT_DIR = os.environ['E3FP_PROJECT']
 BASEDIR = os.path.join(PROJECT_DIR, 'fingerprint_comparison')
 SHAPE_TC_COUNTS_FILE = os.path.join(BASEDIR, "rocs-shape_e3fp_tcs.csv.gz")
 COMBO_TC_COUNTS_FILE = os.path.join(BASEDIR, "rocs-combo_e3fp_tcs.csv.gz")
-CV_BASEDIR = os.path.join(PROJECT_DIR, "fingerprint_comparison",
-                          "maxtc_enrichment")
+CV_BASEDIR = os.path.join(BASEDIR, "maxtc_enrichment")
 ECFP4_CV_DIR = os.path.join(CV_BASEDIR, "ecfp4_maxtc_filtered")
 E3FP_CV_DIR = os.path.join(CV_BASEDIR, "e3fp_maxtc_filtered")
 ROCS_SHAPE_CV_DIR = os.path.join(CV_BASEDIR, "rocs-shape_maxtc_filtered")
 ROCS_COMBO_CV_DIR = os.path.join(CV_BASEDIR, "rocs-combo_maxtc_filtered")
-OUT_IMAGE_BASENAME = "rocs_tcs_supp_v3"
+
+RANDOM_CONF_DIR = os.path.join(BASEDIR, "random_conformers")
+RANDOM_PAIR_DIR = os.path.join(BASEDIR, "random_conformer_pairs")
+
+OUT_GLOBAL_BASENAME = "rocs_tcs_supp_v3"
+OUT_CONFS_BASENAME = "rocs_conf_rmsds_supp_v3"
 EC_YMIN = .6
 setup_logging(verbose=True)
 
@@ -52,6 +57,26 @@ def get_best_fold_by_enrichment(cv_dir):
 def remove_bad_pairs(df):
     cols = df.columns[:2]
     return df.loc[(df[cols[0]] >=0) & (df[cols[1]] >= 0)]
+
+
+def plot_comp_vs_rmsd(rmsd_memmap, tcs_memmaps, axes, rmsd_name='RMSD',
+                      tcs_names=None, fit_line=False):
+    if tcs_names is None:
+        tcs_names = ["TC" for x in tcs_memmaps]
+
+    rmsds = np.memmap(rmsd_memmap, mode='r', dtype=np.double)
+    df = pd.DataFrame()
+    df[rmsd_name] = rmsds
+
+    for i, (mmap, name) in enumerate(zip(tcs_memmaps, tcs_names)):
+        ax = axes[i]
+        tcs = np.memmap(mmap, mode='r', dtype=np.double)
+        df[name] = tcs
+        plot_tc_heatmap(df, ax=ax, outliers_df=None, cols=[rmsd_name, name],
+                        ref_line=False, fit_line=fit_line, logscale=True,
+                        set_auto_limits=True)
+        ax.set_xticks(range(1, 8))
+        ax.set_xticklabels([str(i) for i in range(1, 8)])
 
 
 if __name__ == "__main__":
@@ -124,5 +149,33 @@ if __name__ == "__main__":
 
     add_panel_labels(axes=panel_axes, xoffset=panel_xoffsets)
     fig.tight_layout(rect=[0.01, 0, 1, .97])
-    fig.savefig(OUT_IMAGE_BASENAME + ".png", dpi=300)
-    fig.savefig(OUT_IMAGE_BASENAME + ".tif", dpi=300)
+    fig.savefig(OUT_GLOBAL_BASENAME + ".png", dpi=300)
+    fig.savefig(OUT_GLOBAL_BASENAME + ".tif", dpi=300)
+
+    # Plot Comparisons vs RMSDS
+    fig = plt.figure(figsize=(6.4, 3.1))
+    rmsd_file = os.path.join(RANDOM_CONF_DIR, "rmsds.bin")
+    comp_files = [
+        os.path.join(RANDOM_CONF_DIR, x) for x in [
+            'ecfp_tcs.bin', 'e3fp_tcs.bin', 'rocs_shape.bin',
+            'rocs_combo.bin']]
+    names = ['ECFP4 TC', 'E3FP Max TC', 'ROCS-shape', 'ROCS-combo']
+    axes = [fig.add_subplot(2, 4, i + 1) for i in range(4)]
+    plot_comp_vs_rmsd(rmsd_file, comp_files, axes, rmsd_name='RMSD',
+                      tcs_names=names, fit_line=False)
+
+    rmsd_file = os.path.join(RANDOM_PAIR_DIR, "rmsds.bin")
+    comp_files = [
+        os.path.join(RANDOM_PAIR_DIR, x) for x in [
+            'tfds.bin', 'e3fp_tcs.bin', 'fastrocs_shape_tcs.bin',
+            'fastrocs_combo_tcs.bin']]
+    names = ['TFD', 'E3FP Max TC', 'ROCS-shape', 'ROCS-combo']
+    axes = [fig.add_subplot(2, 4, i + 1) for i in range(4, 8)]
+    plot_comp_vs_rmsd(rmsd_file, comp_files, axes, rmsd_name='RMSD',
+                      tcs_names=names, fit_line=True)
+
+    sns.despine(fig=fig, offset=1)
+    add_panel_labels(fig=fig, xoffset=.38)
+    fig.tight_layout(rect=[0.01, 0, 1, .97])
+    fig.savefig(OUT_CONFS_BASENAME + ".png", dpi=300)
+    fig.savefig(OUT_CONFS_BASENAME + ".tif", dpi=300)
