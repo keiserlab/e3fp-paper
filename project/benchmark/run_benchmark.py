@@ -5,26 +5,19 @@ E-mail: seth.axen@gmail.com
 """
 import time
 import sys
+import os
 
-import numpy as np
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from python_utilities.parallel import Parallelizer
-from e3fp.conformer.util import smiles_to_dict, mol_from_smiles
-from e3fp.conformer.generator import ConformerGenerator
+from e3fp.conformer.util import smiles_to_dict, mol_from_sdf
 from e3fp.pipeline import params_to_dicts, fprints_from_mol
 from e3fp_paper.pipeline import load_params
 
 
-def get_random_smiles(smiles_file, n):
-    smiles_dict = smiles_to_dict(smiles_file)
-    return {k: smiles_dict[k] for k
-            in np.random.choice(smiles_dict.keys(), size=n, replace=False)}
-
-
-def benchmark_fprinting(smiles, name, confgen_params={},
-                        fprint_params={}):
-    mol = mol_from_smiles(smiles, name)
+def benchmark_fprinting(smiles, sdf_file, name, fprint_params={}):
+    mol = mol_from_sdf(sdf_file, conf_num=fprint_params.get('first', None))
+    num_confs = mol.GetNumConformers()
     num_rot = AllChem.CalcNumRotatableBonds(mol)
     num_heavy = mol.GetNumHeavyAtoms()
 
@@ -33,43 +26,40 @@ def benchmark_fprinting(smiles, name, confgen_params={},
     fprint_2d_time = time.time() - start_time
 
     start_time = time.time()
-    conf_gen = ConformerGenerator(**confgen_params)
-    mol = conf_gen.generate_conformers(mol)
-    confgen_time = time.time() - start_time
-    num_confs = mol.GetNumConformers()
-
-    start_time = time.time()
     fprints_from_mol(mol, fprint_params=fprint_params, save=False)
     fprint_3d_time = time.time() - start_time
 
-    return (fprint_2d_time, confgen_time, fprint_3d_time, num_heavy,
-            num_confs, num_rot)
+    return (fprint_2d_time, fprint_3d_time, num_heavy, num_confs, num_rot)
 
 
-def main(smiles_file, out_file, num_mols):
-    confgen_params, fprint_params = params_to_dicts(load_params())
-    del confgen_params['out_dir'], confgen_params['compress']
-    smiles_dict = get_random_smiles(smiles_file, n=num_mols)
+def get_sdf_file(mol_name, sdf_dir):
+    return os.path.join(sdf_dir, mol_name + ".sdf.bz2")
+
+
+def main(smiles_file, sdf_dir, out_file):
+    _, fprint_params = params_to_dicts(load_params())
+    smiles_dict = smiles_to_dict(smiles_file)
 
     para = Parallelizer()
-    smiles_iter = ((smiles, name) for name, smiles in smiles_dict.items())
-    kwargs = {"confgen_params": confgen_params, "fprint_params": fprint_params}
+    smiles_iter = ((smiles, get_sdf_file(name, sdf_dir), name)
+                   for name, smiles in smiles_dict.items())
+    kwargs = {"fprint_params": fprint_params}
     results_iter = para.run_gen(benchmark_fprinting, smiles_iter,
                                 kwargs=kwargs)
 
     with open(out_file, "w") as f:
-        f.write("\t".join(["ECFP4 Time", "ConfGen Time", "E3FP Time",
-                           "Num Heavy", "Num Confs", "Num Rot"]) + "\n")
-        for results, (_, name) in results_iter:
-            f.write(
-                "{:.4g}\t{:.4g}\t{:.4g}\t{:d}\t{:d}\t{:d}\n".format(*results))
+        f.write("\t".join(["Name", "ECFP4 Time", "E3FP Time", "Num Heavy",
+                           "Num Confs", "Num Rot"]) + "\n")
+        for results, (_, _, name) in results_iter:
+            print(results)
+            f.write("{}\t{:.4g}\t{:.4g}\t{:d}\t{:d}\t{:d}\n".format(
+                name, *results))
 
 
 if __name__ == "__main__":
-    usage = "python run_benchmark.py <smiles_file> <num_mols> <out_file>"
+    usage = "python run_benchmark.py <smiles_file> <sdf_dir> <out_file>"
     try:
-        smiles_file, num_mols, out_file = sys.argv[1:]
-        num_mols = int(num_mols)
+        smiles_file, sdf_dir, out_file = sys.argv[1:]
     except:
         sys.exit(usage)
-    main(smiles_file, out_file, num_mols)
+    main(smiles_file, sdf_dir, out_file)
