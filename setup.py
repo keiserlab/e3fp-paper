@@ -4,7 +4,7 @@ except ImportError:
     from distutils.core import setup
 
 requirements = [
-    'e3fp>=1.0',
+    'e3fp>=1.1',
     'sdaxen_python_utilities>=0.1.4',
     'scipy>=0.18.0',
     'numpy>=1.11.3',
@@ -33,7 +33,7 @@ setup(
     name='e3fp_paper',
     packages=['e3fp_paper', 'e3fp_paper.crossvalidation',
               'e3fp_paper.plotting', 'e3fp_paper.sea_utils'],
-    version='1.0',
+    version='1.1',
     description='E3FP paper library and repo',
     keywords='e3fp 3d molecule fingerprint conformer paper',
     author='Seth Axen',
@@ -41,7 +41,7 @@ setup(
     license='LGPLv3',
     url='https://github.com/keiserlab/e3fp-paper',
     classifiers=classifiers,
-    download_url='https://github.com/keiserlab/e3fp-paper/tarball/1.0',
+    download_url='https://github.com/keiserlab/e3fp-paper/tarball/1.1',
     install_requires=requirements,
     include_package_data=True
 )
