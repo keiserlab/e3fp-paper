@@ -12,7 +12,7 @@ requirements = [
     'networkx>=1.11',
     'nolearn>=0.6.0',
     'pandas>=0.18.1',
-    'pygraphviz==1.3.1',
+    'pygraphviz>=1.3.1',
     'scikit-learn>=0.18.0',
     'seaborn>=0.7.1'
 ]
