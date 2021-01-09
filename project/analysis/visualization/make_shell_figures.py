@@ -619,8 +619,8 @@ if __name__ == "__main__":
             node_order[node] = None
     nx.set_node_attributes(out_graph, name='order', values=node_order)
 
-    json_graph = json_graph.node_link_data(out_graph)
+    out_json_graph = json_graph.node_link_data(out_graph)
 
     with open(json_out_file, "w") as f:
-        f.write(json.dumps(json_graph, sort_keys=False, indent=4,
+        f.write(json.dumps(out_json_graph, sort_keys=False, indent=4,
                            separators=(',', ': ')))
