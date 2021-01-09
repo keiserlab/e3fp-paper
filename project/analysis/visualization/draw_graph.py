@@ -88,8 +88,7 @@ if __name__ == "__main__":
                    rank="same")
 
     for link in tree["links"]:
-        G.add_edge(tree["nodes"][link["source"]]["id"],
-                   tree["nodes"][link["target"]]["id"], **edge_attributes)
+        G.add_edge(link["source"], link["target"], **edge_attributes)
 
     G.layout(args="-Goverlap=false")
     G.draw(os.path.join(mol_figs_dir, 'graph.png'), prog='dot')
