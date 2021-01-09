@@ -160,9 +160,9 @@ def create_shell_graph(fp, radius_multiplier=RADIUS_MULTIPLIER,
             print("added edge between {} and {}".format(s.identifier,
                                                         shell.identifier))
         shell_to_node_map[shell] = None
-    nx.set_node_attributes(G, 'shell', identifier_to_shell)
-    nx.set_node_attributes(G, 'level', shell_level)
-    nx.set_node_attributes(G, 'atom_id', shell_atom)
+    nx.set_node_attributes(G, name='shell', values=identifier_to_shell)
+    nx.set_node_attributes(G, name='level', values=shell_level)
+    nx.set_node_attributes(G, name='atom_id', values=shell_atom)
     return G
 
 
@@ -379,13 +379,13 @@ def pymol_load_with_defaults(pdb_file=None, stick_radius=.1, sphere_scale=.15):
 
 def get_atom_types(mol, graph):
     logging.info("Get atom types of nodes.")
-    root = nx.topological_sort(graph)[0]
+    root = next(nx.topological_sort(graph))
     assert(root == ROOT_NODE_NAME)
     atom_nodes = sorted(graph[root].keys())
     atom_types_dict = {}
     for node in atom_nodes:
         atom_types_dict[node] = set([x.center_atom for x
-                                    in graph.node[node]["shell"]])
+                                    in graph.nodes[node]["shell"]])
     return atom_types_dict
 
 
@@ -507,12 +507,12 @@ def save_shell_figures(mol_pdb_file, shell_pdb_files, graph, atom_colors,
         identifier = int(os.path.basename(pdb_file).split('.')[0])
         shell_image_file = os.path.join(
             out_dir, "{}_shell.png".format(identifier))
-        graph.node[identifier]["image"] = shell_image_file
+        graph.nodes[identifier]["image"] = shell_image_file
         if not overwrite and os.path.isfile(shell_image_file):
             continue
         cmd.reinitialize()
         pymol_load_with_defaults(pdb_file)
-        shell = list(graph.node[identifier]["shell"])[0]
+        shell = list(graph.nodes[identifier]["shell"])[0]
         radius = shell.radius
         if radius > 0:
             radii.add(radius)
@@ -611,13 +611,13 @@ if __name__ == "__main__":
     node_order = {}
     left_to_right_atom_ids = list(left_to_right_atom_ids)
     for node in out_graph:
-        del(out_graph.node[node]["shell"])
-        if out_graph.node[node]["level"] == 0:
+        del(out_graph.nodes[node]["shell"])
+        if out_graph.nodes[node]["level"] == 0:
             node_order[node] = left_to_right_atom_ids.index(
-                out_graph.node[node]["atom_id"])
+                out_graph.nodes[node]["atom_id"])
         else:
             node_order[node] = None
-    nx.set_node_attributes(out_graph, 'order', node_order)
+    nx.set_node_attributes(out_graph, name='order', values=node_order)
 
     json_graph = json_graph.node_link_data(out_graph)
 
