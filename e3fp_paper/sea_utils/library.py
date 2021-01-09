@@ -35,25 +35,25 @@ def fit_wizard_auto(modelfile, library, tc_range, dists=None, testing=False,
     dist_file = "{0}-distfit.png".format(lib_name)
     if not testing and not no_plot:
         plotfile = os.path.join(lib_dir, dist_file)
-        print "plot dists"
+        print("plot dists")
         plot_dists(dists, plotfile)
     suggested = suggested_cutoff(dists)
-    print "\nDistribution quality plot shown in browser window."
-    print "\tSuggested cutoff from simplistic ratio analysis: %g" % suggested
+    print("\nDistribution quality plot shown in browser window.")
+    print("\tSuggested cutoff from simplistic ratio analysis: %g" % suggested)
     if testing:
         cutoff = 0.28
     else:
-        print "\tAutomatically picking cutoff as: %g." % suggested
+        print("\tAutomatically picking cutoff as: %g." % suggested)
         val = suggested
         val = round_cutoff(val)
         try:
             dists[val]
         except KeyError:
-            print "No data for that cutoff. Continuing anyways."
+            print("No data for that cutoff. Continuing anyways.")
         cutoff = val
     fit = dists[cutoff][1]
     save_fit(library, cutoff, fit)
-    print "Fit saved to library file!"
+    print("Fit saved to library file!")
 
 
 def library_fit(library_file, yes=False, testing=False, plot_prefix=None,
