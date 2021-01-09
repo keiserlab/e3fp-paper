@@ -119,7 +119,7 @@ def create_shell_graph(fp, radius_multiplier=RADIUS_MULTIPLIER,
     shell_level = {signed_to_unsigned_int(k.identifier): int(
                        round(k.radius / radius_multiplier))
                    for k in shells_to_examine}
-    shell_atom = {signed_to_unsigned_int(k.identifier): k.center_atom
+    shell_atom = {signed_to_unsigned_int(k.identifier): int(k.center_atom)
                   for k in shells_to_examine}
     shell_to_substruct_map = {}
     G = nx.DiGraph()  # create an empty graph
@@ -145,7 +145,7 @@ def create_shell_graph(fp, radius_multiplier=RADIUS_MULTIPLIER,
             shells_to_examine.add(last_shell)
             shell_level[last_shell.identifier] = (
                 shell_level[shell.identifier] - 1)
-            shell_atom[last_shell.identifier] = last_shell.center_atom
+            shell_atom[last_shell.identifier] = int(last_shell.center_atom)
             G.add_edge(last_shell.identifier, shell.identifier)
             print("added edge between {} and {}".format(
                 last_shell.identifier, shell.identifier))
@@ -155,7 +155,7 @@ def create_shell_graph(fp, radius_multiplier=RADIUS_MULTIPLIER,
                 s = s.duplicate
             s.identifier = signed_to_unsigned_int(s.identifier)
             shell_level[s.identifier] = shell_level[shell.identifier] - 1
-            shell_atom[s.identifier] = s.center_atom
+            shell_atom[s.identifier] = int(s.center_atom)
             G.add_edge(s.identifier, shell.identifier)
             print("added edge between {} and {}".format(s.identifier,
                                                         shell.identifier))
@@ -220,7 +220,7 @@ def get_cgo_arc_obj(center, norm, start, radians, linespacing=0.,
     start2 = np.dot(rot1, start_ref.reshape(3, 1)).T
     rot2 = make_rotation_matrix(start2, np.array([1., 0., 0.]))
     inv_rot = np.dot(rot2, rot1).T
-    angles = np.linspace(0., radians, float(radians) / res)
+    angles = np.linspace(0., radians, int(float(radians) / res))
     ref_xyz = np.empty((angles.shape[0], 3), dtype=np.double)
     ref_xyz[:, 0] = rad * np.cos(angles)
     ref_xyz[:, 1] = rad * np.sin(angles)
@@ -406,7 +406,7 @@ def define_colors_by_atom_types(d, mol, cycle=COLOR_ALPHABET,
     atom_colors = {}
     for i, (identifier, atoms) in enumerate(
             sorted(d.items(), key=lambda x: (-len(x[1]), x[0]))):
-        elem = mol.GetAtomWithIdx(list(atoms)[0]).GetSymbol()
+        elem = mol.GetAtomWithIdx(int(list(atoms)[0])).GetSymbol()
         cpk = elem_colors.get(elem, (0, 0, 0))
         rgb = sorted([(x, int(10 * compute_yuv_dist(cpk, x)) * .1, j)
                       for j, x in enumerate(colors)
